@@ -97,7 +97,7 @@ login_argocd() {
     argocd login "$SERVER_URL" --username admin --password "$ADMIN_PASSWD" --insecure --grpc-web || error_exit "Failed to login to ArgoCD."
 }
 
-# ========== CONFIGURE GIT REPO ==========
+# ========== CONFIGURE GIT REPO & REGISTER IN ARGOCD ==========
 setup_git() {
     log_info "Setting up Git repository..."
     if [[ ! -d .git ]]; then
@@ -114,6 +114,14 @@ setup_git() {
     git push https://"$GIT_USERNAME":"$GIT_TOKEN"@github.com/kevin-biot/deployment-ocs.git "$GIT_BRANCH" || error_exit "Failed to push changes to GitHub."
 
     log_info "Git repository successfully updated."
+
+    # Add repository to ArgoCD
+    log_info "Registering Git repository in ArgoCD..."
+    if argocd repo list | grep -q "$GIT_REPO"; then
+        log_info "Git repository is already registered in ArgoCD."
+    else
+        argocd repo add "$GIT_REPO" --username "$GIT_USERNAME" --password "$GIT_TOKEN" || error_exit "Failed to add Git repository to ArgoCD."
+    fi
 }
 
 # ========== CREATE ARGOCD APPLICATIONS ==========
