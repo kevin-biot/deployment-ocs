@@ -31,9 +31,9 @@ mkdir -p "$LOG_DIR"
 # Ensure OpenShift Login
 log_info "Checking OpenShift login status..."
 if ! oc whoami &>/dev/null; then
-    log_info "Logging in to OpenShift..."
-    oc login -u kubeadmin || error_exit "OpenShift login failed!"
-fi
+    log_error "Not logged into OpenShift. Please login using 'oc login' and retry."
+    exit 1
+fi      
 log_info "OpenShift login verified."
 
 # Check if script is running in the correct directory
@@ -71,20 +71,24 @@ install_argocd() {
 # ========== CHECK ARGOCD LOGIN ==========
 login_argocd() {
     log_info "Checking if already logged into ArgoCD..."
-    if argocd account get-user &>/dev/null; then
+    if argocd account get-user-info --server "$ARGOCD_SERVER" --grpc-web --insecure &>/dev/null; then
         log_info "Already logged into ArgoCD. Skipping login."
         return
     fi
 
     log_info "Logging into ArgoCD..."
-    ADMIN_PASSWD=$(oc get secret -n "$ARGO_NAMESPACE" argocd-secret -o jsonpath='{.data.admin\.password}' | base64 -d)
-    SERVER_URL=$(oc get routes openshift-gitops-server -n "$ARGO_NAMESPACE" -o jsonpath='{.status.ingress[0].host}')
-    
-    if [[ -z "$ADMIN_PASSWD" || -z "$SERVER_URL" ]]; then
+    ADMIN_PASSWD=$(oc get secret openshift-gitops-cluster -n "$ARGO_NAMESPACE" -o jsonpath='{.data.admin\.password}' | base64 -d)
+    ARGOCD_SERVER=$(oc get routes -n "$ARGO_NAMESPACE" -o jsonpath="{.items[?(@.metadata.name=='openshift-gitops-server')].spec.host}")
+
+    if [[ -z "$ADMIN_PASSWD" || -z "$ARGOCD_SERVER" ]]; then
         error_exit "ArgoCD credentials or route not found. Check installation."
     fi
-    
-    argocd login "$SERVER_URL" --username admin --password "$ADMIN_PASSWD" --insecure --grpc-web || error_exit "Failed to login to ArgoCD."
+
+    if ! argocd login "$ARGOCD_SERVER" --username admin --password "$ADMIN_PASSWD" --insecure --grpc-web; then
+        error_exit "Failed to login to ArgoCD."
+    fi
+
+    log_info "Successfully logged into ArgoCD."
 }
 
 # ========== CONFIGURE GIT REPO ==========
@@ -96,7 +100,7 @@ setup_git() {
         git remote add origin "$GIT_REPO"
         git branch -M "$GIT_BRANCH"
     fi
-    
+
     log_info "Ensuring repo contains necessary files..."
     touch argocd/bootstrap-rbac.yaml
     git add .
@@ -160,3 +164,6 @@ setup_git
 create_argocd_apps
 
 log_info "GitOps deployment completed successfully! 🎉"
+log_info "Access ArgoCD at: https://$ARGOCD_SERVER"
+
+exit 0
