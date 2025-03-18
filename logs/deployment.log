@@ -1,0 +1,8 @@
+\e[32m[INFO] Checking OpenShift login status...\e[0m
+\e[32m[INFO] OpenShift login verified.\e[0m
+\e[32m[INFO] Checking if script is running in correct directory...\e[0m
+\e[32m[INFO] Correct directory detected.\e[0m
+\e[32m[INFO] Checking if ArgoCD Operator is installed...\e[0m
+\e[32m[INFO] ArgoCD Operator is installed and running.\e[0m
+\e[32m[INFO] Setting up Git repository...\e[0m
+\e[32m[INFO] Ensuring repo contains necessary files...\e[0m
