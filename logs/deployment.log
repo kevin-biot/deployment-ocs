@@ -10,3 +10,10 @@
 \e[32m[INFO] Logging into ArgoCD...\e[0m
 \e[32m[INFO] Setting up Git repository...\e[0m
 \e[32m[INFO] Ensuring repo contains necessary files...\e[0m
+\e[32m[INFO] Git repository successfully updated.\e[0m
+\e[32m[INFO] Registering Git repository in ArgoCD...\e[0m
+\e[32m[INFO] Checking if ArgoCD has access to Git repository...\e[0m
+\e[32m[INFO] Creating ArgoCD applications from GitHub...\e[0m
+\e[31m[ERROR] Failed to create Tekton application.\e[0m
+\e[32m[INFO] Cleaning up due to failure...\e[0m
+\e[32m[INFO] Cleanup complete. Exiting...\e[0m
