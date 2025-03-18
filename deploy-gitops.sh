@@ -19,6 +19,16 @@ LOCAL_GIT_DIR=~/deployment-ocs
 LOG_DIR="$LOCAL_GIT_DIR/logs"
 DEPLOY_LOG="$LOG_DIR/deployment.log"
 
+# User credentials (Prompt if not set)
+GIT_USERNAME="${GIT_USERNAME:-kevin-biot}"
+GIT_TOKEN="${GIT_TOKEN:-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}"
+
+if [[ -z "$GIT_TOKEN" || -z "$GIT_USERNAME" ]]; then
+    read -p "Enter GitHub Username: " GIT_USERNAME
+    read -s -p "Enter GitHub Personal Access Token (PAT): " GIT_TOKEN
+    echo ""
+fi
+
 # ========== UTILITIES ==========
 log_info() { echo -e "\e[32m[INFO] $1\e[0m" | tee -a "$DEPLOY_LOG"; }
 log_error() { echo -e "\e[31m[ERROR] $1\e[0m" | tee -a "$DEPLOY_LOG"; }
@@ -31,9 +41,9 @@ mkdir -p "$LOG_DIR"
 # Ensure OpenShift Login
 log_info "Checking OpenShift login status..."
 if ! oc whoami &>/dev/null; then
-    log_error "Not logged into OpenShift. Please login using 'oc login' and retry."
-    exit 1
-fi      
+    log_info "Logging in to OpenShift..."
+    oc login -u kubeadmin || error_exit "OpenShift login failed!"
+fi
 log_info "OpenShift login verified."
 
 # Check if script is running in the correct directory
@@ -71,24 +81,20 @@ install_argocd() {
 # ========== CHECK ARGOCD LOGIN ==========
 login_argocd() {
     log_info "Checking if already logged into ArgoCD..."
-    if argocd account get-user-info --server "$ARGOCD_SERVER" --grpc-web --insecure &>/dev/null; then
+    if argocd account get-user &>/dev/null; then
         log_info "Already logged into ArgoCD. Skipping login."
         return
     fi
 
     log_info "Logging into ArgoCD..."
     ADMIN_PASSWD=$(oc get secret openshift-gitops-cluster -n "$ARGO_NAMESPACE" -o jsonpath='{.data.admin\.password}' | base64 -d)
-    ARGOCD_SERVER=$(oc get routes -n "$ARGO_NAMESPACE" -o jsonpath="{.items[?(@.metadata.name=='openshift-gitops-server')].spec.host}")
+    SERVER_URL=$(oc get routes openshift-gitops-server -n "$ARGO_NAMESPACE" -o jsonpath='{.status.ingress[0].host}')
 
-    if [[ -z "$ADMIN_PASSWD" || -z "$ARGOCD_SERVER" ]]; then
+    if [[ -z "$ADMIN_PASSWD" || -z "$SERVER_URL" ]]; then
         error_exit "ArgoCD credentials or route not found. Check installation."
     fi
 
-    if ! argocd login "$ARGOCD_SERVER" --username admin --password "$ADMIN_PASSWD" --insecure --grpc-web; then
-        error_exit "Failed to login to ArgoCD."
-    fi
-
-    log_info "Successfully logged into ArgoCD."
+    argocd login "$SERVER_URL" --username admin --password "$ADMIN_PASSWD" --insecure --grpc-web || error_exit "Failed to login to ArgoCD."
 }
 
 # ========== CONFIGURE GIT REPO ==========
@@ -105,15 +111,23 @@ setup_git() {
     touch argocd/bootstrap-rbac.yaml
     git add .
     git commit -m "Initialize GitOps configuration"
-    git push origin "$GIT_BRANCH" || error_exit "Failed to push changes to GitHub."
+    git push https://"$GIT_USERNAME":"$GIT_TOKEN"@github.com/kevin-biot/deployment-ocs.git "$GIT_BRANCH" || error_exit "Failed to push changes to GitHub."
 
     log_info "Git repository successfully updated."
 }
 
 # ========== CREATE ARGOCD APPLICATIONS ==========
 create_argocd_apps() {
-    log_info "Creating ArgoCD applications from GitHub..."
+    log_info "Checking if ArgoCD has access to Git repository..."
+    
+    if ! argocd repo list | grep -q "$GIT_REPO"; then
+        log_error "ArgoCD does not have access to the Git repository!"
+        log_error "Please add the repository using a personal access token or SSH key."
+        error_exit "Repository authentication required."
+    fi
 
+    log_info "Creating ArgoCD applications from GitHub..."
+    
     argocd app create tekton-app --upsert \
       --repo "$GIT_REPO" --path "argocd/tekton-app.yaml" \
       --dest-server "https://kubernetes.default.svc" --dest-namespace "$TEKTON_NAMESPACE" \
@@ -127,33 +141,11 @@ create_argocd_apps() {
     log_info "ArgoCD applications created successfully."
 }
 
-# ========== WAIT FUNCTION ==========
-wait_for_pods() {
-    local namespace="$1"
-    local TIMEOUT=300
-    local INTERVAL=10
-    local elapsed=0
-
-    while true; do
-        RUNNING_COUNT=$(oc get pods -n "$namespace" --no-headers 2>/dev/null | grep -c "Running")
-        TOTAL_COUNT=$(oc get pods -n "$namespace" --no-headers 2>/dev/null | wc -l)
-
-        if [[ "$RUNNING_COUNT" -gt 0 && "$RUNNING_COUNT" -eq "$TOTAL_COUNT" ]]; then
-            log_info "All pods in $namespace are running."
-            break
-        fi
-
-        if [[ "$elapsed" -ge "$TIMEOUT" ]]; then
-            log_error "Pods in $namespace did not start in time!"
-            oc get pods -n "$namespace" | tee -a "$DEPLOY_LOG"
-            oc logs --tail=20 -n "$namespace" | tee -a "$DEPLOY_LOG"
-            error_exit "Namespace $namespace failed to start."
-        fi
-
-        sleep "$INTERVAL"
-        elapsed=$((elapsed + INTERVAL))
-        log_info "Waiting for pods in $namespace... ($elapsed/$TIMEOUT seconds elapsed)"
-    done
+# ========== DISPLAY ACCESS URLS ==========
+display_urls() {
+    log_info "ArgoCD Web UI: https://$(oc get route -n openshift-gitops openshift-gitops-server -o jsonpath='{.spec.host}')"
+    log_info "Tekton Dashboard: https://$(oc get route -n $TEKTON_NAMESPACE tekton-dashboard -o jsonpath='{.spec.host}')"
+    log_info "AWX Web UI: https://$(oc get route -n $ANSIBLE_NAMESPACE awx-service -o jsonpath='{.spec.host}')"
 }
 
 # ========== MAIN DEPLOYMENT ==========
@@ -162,8 +154,6 @@ install_argocd
 login_argocd
 setup_git
 create_argocd_apps
+display_urls
 
 log_info "GitOps deployment completed successfully! 🎉"
-log_info "Access ArgoCD at: https://$ARGOCD_SERVER"
-
-exit 0
