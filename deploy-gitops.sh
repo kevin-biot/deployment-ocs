@@ -9,6 +9,9 @@
 # - AWX Operator
 # Ensures proper logging, error handling, and cleanup on failure.
 
+set -euo pipefail
+trap cleanup_on_failure EXIT
+
 # ========== CONFIGURATION ==========
 GIT_REPO="https://github.com/kevin-biot/deployment-ocs.git"
 GIT_BRANCH="main"
@@ -19,24 +22,35 @@ LOCAL_GIT_DIR=~/deployment-ocs
 LOG_DIR="$LOCAL_GIT_DIR/logs"
 DEPLOY_LOG="$LOG_DIR/deployment.log"
 
-# User credentials (Prompt if not set)
-GIT_USERNAME="${GIT_USERNAME:-kevin-biot}"
-GIT_TOKEN="${GIT_TOKEN:-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}"
-
-if [[ -z "$GIT_TOKEN" || -z "$GIT_USERNAME" ]]; then
-    read -p "Enter GitHub Username: " GIT_USERNAME
-    read -s -p "Enter GitHub Personal Access Token (PAT): " GIT_TOKEN
-    echo ""
-fi
+# Detect GitHub username automatically
+GIT_USERNAME="${GIT_USERNAME:-$(echo "$GIT_REPO" | awk -F'/' '{print $(NF-1)}')}"
+GIT_TOKEN="${GIT_TOKEN:-}" # Expect token to be set as environment variable
 
 # ========== UTILITIES ==========
 log_info() { echo -e "\e[32m[INFO] $1\e[0m" | tee -a "$DEPLOY_LOG"; }
 log_error() { echo -e "\e[31m[ERROR] $1\e[0m" | tee -a "$DEPLOY_LOG"; }
-error_exit() { log_error "$1"; cleanup_on_failure; exit 1; }
+error_exit() { log_error "$1"; exit 1; }
+
+# ========== CHECK DEPENDENCIES ==========
+check_dependencies() {
+    log_info "Checking dependencies..."
+    for cmd in oc argocd git gh yamllint; do
+        if ! command -v "$cmd" &>/dev/null; then
+            log_error "Missing required command: $cmd"
+            error_exit "Please install $cmd before running the script."
+        fi
+    done
+    log_info "All dependencies verified."
+}
 
 # ========== SETUP ==========
 mkdir -p "$LOG_DIR"
 > "$DEPLOY_LOG"
+
+# Validate Git token
+if [[ -z "$GIT_TOKEN" ]]; then
+    error_exit "GIT_TOKEN environment variable not set. Please set it before running the script."
+fi
 
 # Ensure OpenShift Login
 log_info "Checking OpenShift login status..."
@@ -55,27 +69,32 @@ log_info "Correct directory detected."
 # ========== CLEANUP FUNCTION ==========
 cleanup_on_failure() {
     log_info "Cleaning up due to failure..."
-    oc delete ns "$ARGO_NAMESPACE" "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE" --force --grace-period=0 --ignore-not-found
-    log_info "Cleanup complete. Exiting..."
-}
-
-# ========== CHECK OPENSHIFT GITOPS OPERATOR ==========
-validate_gitops_operator() {
-    log_info "Checking if OpenShift GitOps Operator is installed..."
-    if ! oc get csv -n openshift-operators | grep -q "openshift-gitops-operator"; then
-        log_error "OpenShift GitOps Operator (ArgoCD) is not installed!"
-        log_error "Please install the OpenShift GitOps Operator via the OpenShift web console before running this script."
-        error_exit "Exiting due to missing required operator."
+    read -p "Proceed with forced cleanup of namespaces? (y/N): " confirm
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        oc delete ns "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE" --force --grace-period=0 --ignore-not-found
+        log_info "Cleanup complete."
+    else
+        log_info "Cleanup skipped by user request."
     fi
-    log_info "OpenShift GitOps Operator is installed."
 }
 
-# ========== INSTALL ARGOCD ==========
-install_argocd() {
-    validate_gitops_operator
-    log_info "Ensuring ArgoCD namespace exists..."
-    oc create ns "$ARGO_NAMESPACE" --dry-run=client -o yaml | oc apply -f - || error_exit "Failed to create namespace: $ARGO_NAMESPACE"
+# ========== VERIFY OPENSHIFT GITOPS ==========
+verify_gitops() {
+    log_info "Verifying OpenShift GitOps (ArgoCD) is running..."
+    
+    # Check if namespace exists
+    if ! oc get ns "$ARGO_NAMESPACE" &>/dev/null; then
+        error_exit "ArgoCD namespace $ARGO_NAMESPACE not found. Please ensure OpenShift GitOps operator is installed."
+    fi
+    
+    # Check if operator is installed
+    if ! oc get csv -n openshift-operators | grep -q "openshift-gitops-operator"; then
+        error_exit "OpenShift GitOps Operator not found in openshift-operators namespace."
+    fi
+    
+    # Verify pods are running
     wait_for_pods "$ARGO_NAMESPACE"
+    log_info "OpenShift GitOps (ArgoCD) verified as running in $ARGO_NAMESPACE."
 }
 
 # ========== CHECK ARGOCD LOGIN ==========
@@ -88,16 +107,16 @@ login_argocd() {
 
     log_info "Logging into ArgoCD..."
     ADMIN_PASSWD=$(oc get secret openshift-gitops-cluster -n "$ARGO_NAMESPACE" -o jsonpath='{.data.admin\.password}' | base64 -d)
-    SERVER_URL=$(oc get routes openshift-gitops-server -n "$ARGO_NAMESPACE" -o jsonpath='{.status.ingress[0].host}')
+    SERVER_URL=$(oc get routes -n "$ARGO_NAMESPACE" -o jsonpath='{.items[?(@.metadata.name=="openshift-gitops-server")].spec.host}')
 
     if [[ -z "$ADMIN_PASSWD" || -z "$SERVER_URL" ]]; then
-        error_exit "ArgoCD credentials or route not found. Check installation."
+        error_exit "ArgoCD credentials or route not found. Check ArgoCD installation in $ARGO_NAMESPACE."
     fi
 
     argocd login "$SERVER_URL" --username admin --password "$ADMIN_PASSWD" --insecure --grpc-web || error_exit "Failed to login to ArgoCD."
 }
 
-# ========== CONFIGURE GIT REPO & REGISTER IN ARGOCD ==========
+# ========== CONFIGURE GIT REPO ==========
 setup_git() {
     log_info "Setting up Git repository..."
     if [[ ! -d .git ]]; then
@@ -108,34 +127,30 @@ setup_git() {
     fi
 
     log_info "Ensuring repo contains necessary files..."
-    touch argocd/bootstrap-rbac.yaml
+    mkdir -p argocd
+    touch argocd/bootstrap-rbac.yaml argocd/tekton-app.yaml argocd/awx-app.yaml
+
+    # Validate YAML before pushing
+    yamllint -d "{extends: default, rules: {line-length: disable}}" argocd/*.yaml || error_exit "YAML validation failed!"
+
     git add .
-    git commit -m "Initialize GitOps configuration"
-    git push https://"$GIT_USERNAME":"$GIT_TOKEN"@github.com/kevin-biot/deployment-ocs.git "$GIT_BRANCH" || error_exit "Failed to push changes to GitHub."
+    git commit -m "Initialize GitOps configuration" || error_exit "Failed to commit changes"
+    git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH" || error_exit "Failed to push changes to GitHub."
 
     log_info "Git repository successfully updated."
-
-    # Add repository to ArgoCD
-    log_info "Registering Git repository in ArgoCD..."
-    if argocd repo list | grep -q "$GIT_REPO"; then
-        log_info "Git repository is already registered in ArgoCD."
-    else
-        argocd repo add "$GIT_REPO" --username "$GIT_USERNAME" --password "$GIT_TOKEN" || error_exit "Failed to add Git repository to ArgoCD."
-    fi
 }
 
 # ========== CREATE ARGOCD APPLICATIONS ==========
 create_argocd_apps() {
+    log_info "Registering Git repository in ArgoCD..."
+    argocd repo add "$GIT_REPO" --username "$GIT_USERNAME" --password "$GIT_TOKEN" || error_exit "Failed to add Git repo."
+
     log_info "Checking if ArgoCD has access to Git repository..."
-    
     if ! argocd repo list | grep -q "$GIT_REPO"; then
-        log_error "ArgoCD does not have access to the Git repository!"
-        log_error "Please add the repository using a personal access token or SSH key."
-        error_exit "Repository authentication required."
+        error_exit "ArgoCD does not have access to the Git repository!"
     fi
 
     log_info "Creating ArgoCD applications from GitHub..."
-    
     argocd app create tekton-app --upsert \
       --repo "$GIT_REPO" --path "argocd/tekton-app.yaml" \
       --dest-server "https://kubernetes.default.svc" --dest-namespace "$TEKTON_NAMESPACE" \
@@ -149,19 +164,12 @@ create_argocd_apps() {
     log_info "ArgoCD applications created successfully."
 }
 
-# ========== DISPLAY ACCESS URLS ==========
-display_urls() {
-    log_info "ArgoCD Web UI: https://$(oc get route -n openshift-gitops openshift-gitops-server -o jsonpath='{.spec.host}')"
-    log_info "Tekton Dashboard: https://$(oc get route -n $TEKTON_NAMESPACE tekton-dashboard -o jsonpath='{.spec.host}')"
-    log_info "AWX Web UI: https://$(oc get route -n $ANSIBLE_NAMESPACE awx-service -o jsonpath='{.spec.host}')"
-}
-
 # ========== MAIN DEPLOYMENT ==========
-validate_gitops_operator
-install_argocd
+check_dependencies
+verify_gitops
 login_argocd
 setup_git
 create_argocd_apps
-display_urls
 
-log_info "GitOps deployment completed successfully! 🎉"
+log_info "✅ GitOps deployment completed successfully!"
+log_info "📌 ArgoCD UI: https://$SERVER_URL"
