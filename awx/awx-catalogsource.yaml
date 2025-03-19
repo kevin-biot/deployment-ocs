@@ -5,6 +5,6 @@ metadata:
   namespace: openshift-marketplace
 spec:
   sourceType: grpc
-  image: quay.io/operatorhubio/community-operators:latest
+  image: quay.io/operatorhubio/community-operators:1.0.0
   displayName: AWX Community Catalog
   publisher: OperatorHub.io
