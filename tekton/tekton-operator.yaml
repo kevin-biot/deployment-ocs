@@ -1,16 +1,16 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: awx-operator
+  name: tekton-operator
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: awx-operator-clusterrolebinding
+  name: tekton-operator-clusterrolebinding
 subjects:
 - kind: ServiceAccount
-  name: awx-operator
-  namespace: awx-operator
+  name: tekton-operator
+  namespace: tekton-operator
 roleRef:
   kind: ClusterRole
   name: cluster-admin
@@ -19,31 +19,35 @@ roleRef:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: awx-operator
-  namespace: awx-operator
+  name: tekton-operator
+  namespace: tekton-operator
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: awx-operator
-  namespace: awx-operator
+  name: tekton-operator
+  namespace: tekton-operator
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: awx-operator
+      name: tekton-operator
   template:
     metadata:
       labels:
-        name: awx-operator
+        name: tekton-operator
     spec:
-      serviceAccountName: awx-operator
+      serviceAccountName: tekton-operator
       containers:
-      - name: awx-operator
-        image: quay.io/ansible/awx-operator:2.14.0
+      - name: tekton-operator
+        image: quay.io/tekton/operator:v0.73.0
         env:
         - name: WATCH_NAMESPACE
-          value: "awx"
+          value: "openshift-pipelines"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         resources:
           requests:
             cpu: 100m
