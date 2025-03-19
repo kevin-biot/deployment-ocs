@@ -29,6 +29,14 @@ check_dependencies() {
     log_info "Dependencies verified."
 }
 
+# ========== ENSURE REQUIRED NAMESPACES EXIST ==========
+create_namespaces() {
+    log_info "Ensuring required namespaces exist..."
+    oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
+    oc create ns "$ANSIBLE_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
+    log_info "All required namespaces verified."
+}
+
 # ========== VERIFY OPENSHIFT LOGIN ==========
 verify_oc_login() {
     log_info "Verifying OpenShift login..."
@@ -62,6 +70,16 @@ ensure_argocd_git_credentials() {
     else
         log_info "ArgoCD Git credentials already configured."
     fi
+}
+
+# ========== FIX ARGOCD RBAC ==========
+setup_rbac() {
+    log_info "Setting up ClusterRoleBinding for ArgoCD..."
+    oc create clusterrolebinding argocd-cluster-admin \
+        --clusterrole=cluster-admin \
+        --serviceaccount=openshift-gitops:openshift-gitops-argocd-application-controller \
+        --dry-run=client -o yaml | oc apply -f -
+    log_info "ArgoCD has proper cluster-wide access."
 }
 
 # ========== WAIT FOR OPERATOR INSTALLATION ==========
@@ -129,6 +147,8 @@ sync_argocd_app() {
 check_dependencies
 verify_oc_login
 verify_argocd
+create_namespaces
+setup_rbac
 login_argocd
 ensure_argocd_git_credentials
 wait_for_operators
