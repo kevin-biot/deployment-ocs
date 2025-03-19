@@ -29,24 +29,18 @@ check_dependencies() {
     log_info "Dependencies verified."
 }
 
-# ========== ENSURE REQUIRED NAMESPACES EXIST ==========
-create_namespaces() {
-    log_info "Ensuring required namespaces exist..."
-    oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
-    oc create ns "$ANSIBLE_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
-    log_info "All required namespaces verified."
+# ========== CLEAN GIT REPO ==========
+clean_git_repo() {
+    log_info "Cleaning Git repository state..."
+    git reset --hard HEAD
+    git clean -fd tekton awx argocd || true
 }
 
-# ========== REVERT RBAC TO WORKING STATE ==========
-setup_rbac() {
-    log_info "Setting up RBAC for ArgoCD service account..."
-    for ns in "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE"; do
-        oc create rolebinding "argocd-admin-${ns}" \
-            --clusterrole=admin \
-            --serviceaccount="$ARGO_NAMESPACE:openshift-gitops-argocd-application-controller" \
-            -n "$ns" --dry-run=client -o yaml | oc apply -f -
-    done
-    log_info "RBAC RoleBindings configured."
+# ========== VERIFY OPENSHIFT LOGIN ==========
+verify_oc_login() {
+    log_info "Verifying OpenShift login..."
+    oc whoami >/dev/null || error_exit "Not logged into OpenShift."
+    log_info "OpenShift login verified."
 }
 
 # ========== VERIFY ARGOCD ==========
@@ -77,10 +71,18 @@ ensure_argocd_git_credentials() {
     fi
 }
 
-# ========== CREATE YAML FILES (OPERATORS INCLUDED) ==========
+# ========== CREATE DIRECTORIES ==========
+create_directories() {
+    log_info "Creating required directories..."
+    mkdir -p "$LOCAL_GIT_DIR"/{argocd,tekton,awx,logs}
+    log_info "Directories created."
+}
+
+# ========== CREATE YAML FILES (INCLUDING WORKLOADS) ==========
 create_yaml_files() {
     log_info "Creating required YAML files..."
 
+    # Tekton Application
     cat <<EOF > "$LOCAL_GIT_DIR/argocd/tekton-app.yaml"
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -102,6 +104,7 @@ spec:
       selfHeal: true
 EOF
 
+    # AWX Application
     cat <<EOF > "$LOCAL_GIT_DIR/argocd/awx-app.yaml"
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -123,7 +126,37 @@ spec:
       selfHeal: true
 EOF
 
+    # TektonPipeline Custom Resource
+    cat <<EOF > "$LOCAL_GIT_DIR/tekton/tekton-pipeline.yaml"
+apiVersion: operator.tekton.dev/v1alpha1
+kind: TektonPipeline
+metadata:
+  name: pipeline
+  namespace: $TEKTON_NAMESPACE
+EOF
+
+    # AWX Instance Custom Resource
+    cat <<EOF > "$LOCAL_GIT_DIR/awx/awx-instance.yaml"
+apiVersion: awx.ansible.com/v1beta1
+kind: AWX
+metadata:
+  name: awx-instance
+  namespace: $ANSIBLE_NAMESPACE
+EOF
+
     log_info "YAML files created."
+}
+
+# ========== SETUP RBAC (RESTORED TO WORKING STATE) ==========
+setup_rbac() {
+    log_info "Setting up RBAC for ArgoCD service account..."
+    for ns in "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE"; do
+        oc create rolebinding "argocd-admin-${ns}" \
+            --clusterrole=admin \
+            --serviceaccount="$ARGO_NAMESPACE:openshift-gitops-argocd-application-controller" \
+            -n "$ns" --dry-run=client -o yaml | oc apply -f -
+    done
+    log_info "RBAC RoleBindings configured."
 }
 
 # ========== GIT COMMIT ==========
@@ -140,24 +173,16 @@ commit_git() {
 sync_argocd_app() {
     local app="$1"
     log_info "Syncing ArgoCD app: $app..."
-    if argocd app sync "$app" --force; then
-        log_info "$app synced successfully."
-    else
-        log_error "$app sync failed."
-        error_exit "$app failed to sync."
-    fi
+    argocd app sync "$app" --force || error_exit "$app sync failed."
 }
 
 # ========== MAIN EXECUTION FLOW ==========
 check_dependencies
 verify_argocd
-create_namespaces
-setup_rbac
-login_argocd
-ensure_argocd_git_credentials
+create_directories
 create_yaml_files
 commit_git
-
+setup_rbac
 sync_argocd_app "tekton-app"
 sync_argocd_app "awx-app"
 

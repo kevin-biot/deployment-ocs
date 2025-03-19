@@ -231,3 +231,16 @@
 \e[32m[INFO] Creating required YAML files...\e[0m
 \e[32m[INFO] YAML files created.\e[0m
 \e[32m[INFO] Committing and pushing YAML files...\e[0m
+\e[32m[INFO] Changes pushed.\e[0m
+\e[32m[INFO] Syncing ArgoCD app: tekton-app...\e[0m
+\e[31m[ERROR] tekton-app sync failed.\e[0m
+\e[31m[ERROR] tekton-app failed to sync.\e[0m
+\e[32m[INFO] Checking dependencies...\e[0m
+\e[32m[INFO] Dependencies verified.\e[0m
+\e[32m[INFO] Verifying ArgoCD...\e[0m
+\e[32m[INFO] ArgoCD verified.\e[0m
+\e[32m[INFO] Creating required directories...\e[0m
+\e[32m[INFO] Directories created.\e[0m
+\e[32m[INFO] Creating required YAML files...\e[0m
+\e[32m[INFO] YAML files created.\e[0m
+\e[32m[INFO] Committing and pushing YAML files...\e[0m
