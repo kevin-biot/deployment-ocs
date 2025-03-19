@@ -5,6 +5,6 @@ metadata:
   namespace: openshift-pipelines
 spec:
   channel: stable
-  name: tektoncd-operator
-  source: tektoncd-catalog
+  name: tekton-operator  # Adjusted to match OperatorHub naming
+  source: community-catalog
   sourceNamespace: openshift-marketplace

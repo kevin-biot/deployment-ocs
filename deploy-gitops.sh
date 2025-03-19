@@ -190,19 +190,19 @@ spec:
       selfHeal: true
 EOF
 
-    # Tekton Custom CatalogSource
+    # Shared Community CatalogSource
     log_info "Creating tekton/catalogsource.yaml..."
     cat <<EOF > "$LOCAL_GIT_DIR/tekton/catalogsource.yaml"
 apiVersion: operators.coreos.com/v1alpha1
 kind: CatalogSource
 metadata:
-  name: tektoncd-catalog
+  name: community-catalog
   namespace: openshift-marketplace
 spec:
   sourceType: grpc
-  image: quay.io/tekton/operator-catalog:latest
-  displayName: TektonCD Upstream Catalog
-  publisher: TektonCD
+  image: quay.io/operatorhubio/catalog:latest
+  displayName: Community OperatorHub Catalog
+  publisher: OperatorHub.io
   updateStrategy:
     registryPoll:
       interval: 30m
@@ -231,27 +231,9 @@ metadata:
   namespace: $TEKTON_NAMESPACE
 spec:
   channel: stable
-  name: tektoncd-operator
-  source: tektoncd-catalog
+  name: tekton-operator  # Adjusted to match OperatorHub naming
+  source: community-catalog
   sourceNamespace: openshift-marketplace
-EOF
-
-    # AWX Custom CatalogSource
-    log_info "Creating awx/catalogsource.yaml..."
-    cat <<EOF > "$LOCAL_GIT_DIR/awx/catalogsource.yaml"
-apiVersion: operators.coreos.com/v1alpha1
-kind: CatalogSource
-metadata:
-  name: awx-catalog
-  namespace: openshift-marketplace
-spec:
-  sourceType: grpc
-  image: quay.io/ansible/awx-operator-catalog:latest
-  displayName: AWX Upstream Catalog
-  publisher: Ansible
-  updateStrategy:
-    registryPoll:
-      interval: 30m
 EOF
 
     # AWX OperatorGroup
@@ -278,13 +260,13 @@ metadata:
 spec:
   channel: stable
   name: awx-operator
-  source: awx-catalog
+  source: community-catalog
   sourceNamespace: openshift-marketplace
 EOF
 
     # Verify files exist
     log_info "Verifying local files..."
-    for file in "$LOCAL_GIT_DIR/tekton/catalogsource.yaml" "$LOCAL_GIT_DIR/tekton/operatorgroup.yaml" "$LOCAL_GIT_DIR/tekton/tekton-pipelines.yaml" "$LOCAL_GIT_DIR/awx/catalogsource.yaml" "$LOCAL_GIT_DIR/awx/operatorgroup.yaml" "$LOCAL_GIT_DIR/awx/awx-operator.yaml"; do
+    for file in "$LOCAL_GIT_DIR/tekton/catalogsource.yaml" "$LOCAL_GIT_DIR/tekton/operatorgroup.yaml" "$LOCAL_GIT_DIR/tekton/tekton-pipelines.yaml" "$LOCAL_GIT_DIR/awx/operatorgroup.yaml" "$LOCAL_GIT_DIR/awx/awx-operator.yaml"; do
         if [[ ! -f "$file" ]]; then
             error_exit "File $file was not created successfully."
         else
@@ -295,7 +277,7 @@ EOF
     # Force commit and push
     log_info "Committing changes to Git..."
     git add .
-    git commit -m "Deploy CI/CD env with Tekton and AWX from open-source catalogs" || log_info "No changes to commit."
+    git commit -m "Deploy CI/CD env with Tekton and AWX from OperatorHub.io catalog" || log_info "No changes to commit."
     log_info "Pushing to GitHub..."
     git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH" --force || error_exit "Failed to push changes to GitHub."
     log_info "Git repository successfully updated."
@@ -323,7 +305,7 @@ sync_argocd_app() {
 
     while [ $attempt -le $max_attempts ]; do
         log_info "Syncing $app_name (Attempt $attempt of $max_attempts)..."
-        if argocd app sync "$app_name" --force; then
+        if argocd app sync "$app_name" --prune --force; then  # Added --prune to handle old resources
             log_info "$app_name synced successfully."
             return 0
         else
