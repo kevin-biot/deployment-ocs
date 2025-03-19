@@ -38,6 +38,20 @@ check_dependencies() {
     log_info "All dependencies verified."
 }
 
+# ========== CLEANUP OLD CATALOGSOURCES ==========
+cleanup_old_catalogs() {
+    log_info "Cleaning up old CatalogSources for a known state..."
+    for catalog in "awx-catalog" "tektoncd-catalog"; do
+        if oc get catalogsource "$catalog" -n openshift-marketplace &>/dev/null; then
+            log_info "Found $catalog in openshift-marketplace, deleting..."
+            oc delete catalogsource "$catalog" -n openshift-marketplace --force --grace-period=0 || log_error "Failed to delete $catalog, continuing..."
+        else
+            log_info "$catalog not found in openshift-marketplace, skipping deletion."
+        fi
+    done
+    log_info "Old CatalogSource cleanup complete."
+}
+
 # ========== SETUP ==========
 mkdir -p "$LOG_DIR"
 > "$DEPLOY_LOG"
@@ -227,11 +241,11 @@ EOF
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
-  name: tektoncd-operator
+  name: tekton-operator
   namespace: $TEKTON_NAMESPACE
 spec:
   channel: stable
-  name: tekton-operator  # Adjusted to match OperatorHub naming
+  name: tekton-operator
   source: community-catalog
   sourceNamespace: openshift-marketplace
 EOF
@@ -277,7 +291,7 @@ EOF
     # Force commit and push
     log_info "Committing changes to Git..."
     git add .
-    git commit -m "Deploy CI/CD env with Tekton and AWX from OperatorHub.io catalog" || log_info "No changes to commit."
+    git commit -m "Deploy CI/CD env with resilient cleanup and OperatorHub.io catalog" || log_info "No changes to commit."
     log_info "Pushing to GitHub..."
     git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH" --force || error_exit "Failed to push changes to GitHub."
     log_info "Git repository successfully updated."
@@ -305,7 +319,7 @@ sync_argocd_app() {
 
     while [ $attempt -le $max_attempts ]; do
         log_info "Syncing $app_name (Attempt $attempt of $max_attempts)..."
-        if argocd app sync "$app_name" --prune --force; then  # Added --prune to handle old resources
+        if argocd app sync "$app_name" --prune --force; then
             log_info "$app_name synced successfully."
             return 0
         else
@@ -349,6 +363,7 @@ create_argocd_apps() {
 
 # ========== MAIN DEPLOYMENT ==========
 check_dependencies
+cleanup_old_catalogs  # Added cleanup step here
 verify_gitops
 login_argocd
 setup_git
