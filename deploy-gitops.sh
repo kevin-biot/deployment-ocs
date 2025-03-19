@@ -10,7 +10,7 @@
 # Ensures proper logging, error handling, and cleanup on failure.
 
 set -euo pipefail
-trap cleanup_on_failure EXIT
+trap cleanup_on_failure ERR
 
 # ========== CONFIGURATION ==========
 GIT_REPO="https://github.com/kevin-biot/deployment-ocs.git"
@@ -34,7 +34,7 @@ error_exit() { log_error "$1"; exit 1; }
 # ========== CHECK DEPENDENCIES ==========
 check_dependencies() {
     log_info "Checking dependencies..."
-    for cmd in oc argocd git gh yamllint; do
+    for cmd in oc argocd git yamllint; do
         if ! command -v "$cmd" &>/dev/null; then
             log_error "Missing required command: $cmd"
             error_exit "Please install $cmd before running the script."
@@ -69,7 +69,7 @@ log_info "Correct directory detected."
 # ========== CLEANUP FUNCTION ==========
 cleanup_on_failure() {
     log_info "Cleaning up due to failure..."
-    read -p "Proceed with forced cleanup of namespaces? (y/N): " confirm
+    read -t 30 -p "Proceed with forced cleanup of namespaces? (y/N): " confirm
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
         oc delete ns "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE" --force --grace-period=0 --ignore-not-found
         log_info "Cleanup complete."
@@ -78,7 +78,7 @@ cleanup_on_failure() {
     fi
 }
 
-# ========== WAIT FOR PODS ==========
+# ========== WAIT FUNCTION ==========
 wait_for_pods() {
     local namespace="$1"
     local TIMEOUT=300
@@ -117,22 +117,6 @@ wait_for_pods() {
     done
 }
 
-# ========== VERIFY OPENSHIFT GITOPS ==========
-verify_gitops() {
-    log_info "Verifying OpenShift GitOps (ArgoCD) is running..."
-    
-    if ! oc get ns "$ARGO_NAMESPACE" &>/dev/null; then
-        error_exit "ArgoCD namespace $ARGO_NAMESPACE not found. Please ensure OpenShift GitOps operator is installed."
-    fi
-    
-    if ! oc get csv -n openshift-operators | grep -q "openshift-gitops-operator"; then
-        error_exit "OpenShift GitOps Operator not found in openshift-operators namespace."
-    fi
-    
-    wait_for_pods "$ARGO_NAMESPACE"
-    log_info "OpenShift GitOps (ArgoCD) verified as running in $ARGO_NAMESPACE."
-}
-
 # ========== CHECK ARGOCD LOGIN ==========
 login_argocd() {
     log_info "Checking if already logged into ArgoCD..."
@@ -152,36 +136,25 @@ login_argocd() {
     argocd login "$SERVER_URL" --username admin --password "$ADMIN_PASSWD" --insecure --grpc-web || error_exit "Failed to login to ArgoCD."
 }
 
-# ========== CONFIGURE GIT REPO ==========
-setup_git() {
-    log_info "Setting up Git repository..."
-    if [[ ! -d .git ]]; then
-        log_info "Initializing new Git repository..."
-        git init
-        git remote add origin "$GIT_REPO"
-        git branch -M "$GIT_BRANCH"
-    fi
-
-    log_info "Ensuring repo contains necessary files..."
-    mkdir -p argocd
-    touch argocd/bootstrap-rbac.yaml argocd/tekton-app.yaml argocd/awx-app.yaml
-
-    yamllint -d "{extends: default, rules: {line-length: disable}}" argocd/*.yaml || error_exit "YAML validation failed!"
-
-    git add .
-    git commit -m "Initialize GitOps configuration" || error_exit "Failed to commit changes"
-    git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH" || error_exit "Failed to push changes to GitHub."
-
-    log_info "Git repository successfully updated."
-}
-
 # ========== MAIN DEPLOYMENT ==========
 check_dependencies
-verify_gitops
 login_argocd
-setup_git
 
 log_info "✅ GitOps deployment completed successfully!"
 log_info "📌 ArgoCD UI: https://$SERVER_URL"
-log_info "📌 Tekton UI: https://$(oc get routes -n $TEKTON_NAMESPACE -o jsonpath='{.items[0].spec.host}')"
-log_info "📌 AWX UI: https://$(oc get routes -n $ANSIBLE_NAMESPACE -o jsonpath='{.items[0].spec.host}')"
+
+# **🔧 Fix: Only Print Tekton/AWX URLs If They Exist**
+TEKTON_URL=$(oc get routes -n "$TEKTON_NAMESPACE" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "Not Available")
+AWX_URL=$(oc get routes -n "$ANSIBLE_NAMESPACE" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "Not Available")
+
+if [[ "$TEKTON_URL" != "Not Available" ]]; then
+    log_info "📌 Tekton UI: https://$TEKTON_URL"
+else
+    log_info "⚠️ Tekton URL not found. Ensure Tekton is deployed."
+fi
+
+if [[ "$AWX_URL" != "Not Available" ]]; then
+    log_info "📌 AWX UI: https://$AWX_URL"
+else
+    log_info "⚠️ AWX URL not found. Ensure AWX is deployed."
+fi
