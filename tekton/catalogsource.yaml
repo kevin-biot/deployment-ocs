@@ -6,3 +6,5 @@ metadata:
 spec:
   sourceType: grpc
   image: quay.io/operatorhubio/catalog:latest
+  displayName: Community OperatorHub Catalog
+  publisher: OperatorHub.io

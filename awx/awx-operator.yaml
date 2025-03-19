@@ -5,7 +5,6 @@ metadata:
   namespace: awx
 spec:
   channel: stable
-  installPlanApproval: Automatic
   name: awx-operator
-  source: community-operators
+  source: community-catalog
   sourceNamespace: openshift-marketplace
