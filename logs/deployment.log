@@ -29,3 +29,25 @@
 \e[32m[INFO] Confirmed /Users/kevinbrown/deployment-ocs/awx/operatorgroup.yaml exists.\e[0m
 \e[32m[INFO] Confirmed /Users/kevinbrown/deployment-ocs/awx/awx-operator.yaml exists.\e[0m
 \e[32m[INFO] Committing changes to Git...\e[0m
+\e[32m[INFO] Pushing to GitHub...\e[0m
+\e[32m[INFO] Git repository successfully updated.\e[0m
+\e[32m[INFO] Validating and ensuring target namespaces exist...\e[0m
+\e[32m[INFO] Namespace openshift-pipelines already exists.\e[0m
+\e[32m[INFO] Namespace awx already exists.\e[0m
+\e[32m[INFO] Namespace setup complete.\e[0m
+\e[32m[INFO] Registering Git repository in ArgoCD...\e[0m
+\e[32m[INFO] Checking if ArgoCD applications exist...\e[0m
+\e[32m[INFO] tekton-app application already exists.\e[0m
+\e[32m[INFO] awx-app application already exists.\e[0m
+\e[32m[INFO] Syncing ArgoCD applications...\e[0m
+\e[32m[INFO] Syncing tekton-app (Attempt 1 of 3)...\e[0m
+\e[32m[INFO] tekton-app synced successfully.\e[0m
+\e[32m[INFO] Syncing awx-app (Attempt 1 of 3)...\e[0m
+\e[32m[INFO] awx-app synced successfully.\e[0m
+\e[32m[INFO] Waiting for Tekton deployment...\e[0m
+\e[32m[INFO] Attempt 1 of 3: Waiting for pods in openshift-pipelines...\e[0m
+\e[32m[INFO] Checking dependencies...\e[0m
+\e[32m[INFO] All dependencies verified.\e[0m
+\e[32m[INFO] Verifying OpenShift GitOps (ArgoCD) is running...\e[0m
+\e[32m[INFO] Waiting for pods in openshift-gitops to be ready...\e[0m
+\e[32m[INFO] OpenShift GitOps verified.\e[0m
