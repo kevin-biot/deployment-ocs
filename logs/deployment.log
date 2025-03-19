@@ -11,3 +11,16 @@
 \e[32m[INFO] Logging into ArgoCD...\e[0m
 \e[32m[INFO] Setting up Git repository...\e[0m
 \e[32m[INFO] Ensuring repo contains necessary files...\e[0m
+\e[32m[INFO] Git repository successfully updated.\e[0m
+\e[32m[INFO] Validating and ensuring target namespaces exist...\e[0m
+\e[32m[INFO] Namespace openshift-pipelines not found, creating it...\e[0m
+\e[32m[INFO] Namespace openshift-pipelines created successfully.\e[0m
+\e[32m[INFO] Namespace awx not found, creating it...\e[0m
+\e[32m[INFO] Namespace awx created successfully.\e[0m
+\e[32m[INFO] Namespace validation and setup complete.\e[0m
+\e[32m[INFO] Registering Git repository in ArgoCD...\e[0m
+\e[32m[INFO] Checking if Tekton and AWX ArgoCD applications exist...\e[0m
+\e[32m[INFO] Tekton application already exists.\e[0m
+\e[32m[INFO] AWX application already exists.\e[0m
+\e[32m[INFO] Syncing ArgoCD applications...\e[0m
+\e[31m[ERROR] Failed to sync AWX application.\e[0m
