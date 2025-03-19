@@ -4,7 +4,7 @@ metadata:
   name: awx-operator
   namespace: awx
 spec:
-  channel: alpha
+  channel: stable
   name: awx-operator
-  source: community-operators
+  source: awx-catalog
   sourceNamespace: openshift-marketplace

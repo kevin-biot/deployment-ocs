@@ -3,11 +3,8 @@
 # ============================
 # OpenShift GitOps Deployment Script
 # ============================
-# Configures GitOps workflow using existing ArgoCD installation
-# - Verifies ArgoCD (OpenShift GitOps)
-# - Deploys Tekton Pipelines
-# - Deploys AWX Operator
-# Ensures proper logging, error handling, and cleanup on failure.
+# Deploys a CI/CD environment using open-source Tekton and AWX operators
+# Follows GitOps principles: declarative, automated, repeatable via Git and ArgoCD
 
 set -euo pipefail
 trap cleanup_on_failure ERR
@@ -35,8 +32,7 @@ check_dependencies() {
     log_info "Checking dependencies..."
     for cmd in oc argocd git; do
         if ! command -v "$cmd" &>/dev/null; then
-            log_error "Missing required command: $cmd"
-            error_exit "Please install $cmd before running the script."
+            error_exit "Missing required command: $cmd. Please install it."
         fi
     done
     log_info "All dependencies verified."
@@ -47,7 +43,7 @@ mkdir -p "$LOG_DIR"
 > "$DEPLOY_LOG"
 
 if [[ -z "$GIT_TOKEN" ]]; then
-    error_exit "GIT_TOKEN environment variable not set. Please set it before running the script."
+    error_exit "GIT_TOKEN environment variable not set. Please set it."
 fi
 
 log_info "Checking OpenShift login status..."
@@ -60,6 +56,7 @@ log_info "OpenShift login verified."
 if [[ ! -d "$LOCAL_GIT_DIR" ]]; then
     error_exit "Expected script to be run in $LOCAL_GIT_DIR, but it is missing!"
 fi
+cd "$LOCAL_GIT_DIR"
 log_info "Correct directory detected."
 
 # ========== CLEANUP FUNCTION ==========
@@ -77,7 +74,7 @@ cleanup_on_failure() {
 # ========== WAIT FUNCTION ==========
 wait_for_pods() {
     local namespace="$1"
-    local TIMEOUT=300
+    local TIMEOUT=600  # 10 minutes for CRC
     local INTERVAL=10
     local RETRIES=3
     local attempt=1
@@ -112,10 +109,7 @@ wait_for_pods() {
 verify_gitops() {
     log_info "Verifying OpenShift GitOps (ArgoCD) is running..."
     if ! oc get ns "$ARGO_NAMESPACE" &>/dev/null; then
-        error_exit "ArgoCD namespace $ARGO_NAMESPACE not found. Please ensure OpenShift GitOps operator is installed."
-    fi
-    if ! oc get csv -n openshift-operators | grep -q "openshift-gitops-operator"; then
-        error_exit "OpenShift GitOps Operator not found in openshift-operators namespace."
+        error_exit "ArgoCD namespace $ARGO_NAMESPACE not found. Ensure OpenShift GitOps operator is installed."
     fi
     wait_for_pods "$ARGO_NAMESPACE"
     log_info "OpenShift GitOps (ArgoCD) verified as running in $ARGO_NAMESPACE."
@@ -142,9 +136,9 @@ setup_git() {
     log_info "Setting up Git repository..."
     if [[ ! -d "$LOCAL_GIT_DIR/.git" ]]; then
         log_info "Initializing new Git repository..."
-        git -C "$LOCAL_GIT_DIR" init
-        git -C "$LOCAL_GIT_DIR" remote add origin "$GIT_REPO"
-        git -C "$LOCAL_GIT_DIR" branch -M "$GIT_BRANCH"
+        git init
+        git remote add origin "$GIT_REPO"
+        git branch -M "$GIT_BRANCH"
     fi
 
     log_info "Ensuring repo contains necessary files..."
@@ -196,6 +190,24 @@ spec:
       selfHeal: true
 EOF
 
+    # Tekton Custom CatalogSource
+    log_info "Creating tekton/catalogsource.yaml..."
+    cat <<EOF > "$LOCAL_GIT_DIR/tekton/catalogsource.yaml"
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: tektoncd-catalog
+  namespace: openshift-marketplace
+spec:
+  sourceType: grpc
+  image: quay.io/tekton/operator-catalog:latest
+  displayName: TektonCD Upstream Catalog
+  publisher: TektonCD
+  updateStrategy:
+    registryPoll:
+      interval: 30m
+EOF
+
     # Tekton OperatorGroup
     log_info "Creating tekton/operatorgroup.yaml..."
     cat <<EOF > "$LOCAL_GIT_DIR/tekton/operatorgroup.yaml"
@@ -215,13 +227,31 @@ EOF
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
-  name: openshift-pipelines-operator
+  name: tektoncd-operator
   namespace: $TEKTON_NAMESPACE
 spec:
-  channel: latest
-  name: openshift-pipelines-operator-rh
-  source: redhat-operators
+  channel: stable
+  name: tektoncd-operator
+  source: tektoncd-catalog
   sourceNamespace: openshift-marketplace
+EOF
+
+    # AWX Custom CatalogSource
+    log_info "Creating awx/catalogsource.yaml..."
+    cat <<EOF > "$LOCAL_GIT_DIR/awx/catalogsource.yaml"
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: awx-catalog
+  namespace: openshift-marketplace
+spec:
+  sourceType: grpc
+  image: quay.io/ansible/awx-operator-catalog:latest
+  displayName: AWX Upstream Catalog
+  publisher: Ansible
+  updateStrategy:
+    registryPoll:
+      interval: 30m
 EOF
 
     # AWX OperatorGroup
@@ -246,15 +276,15 @@ metadata:
   name: awx-operator
   namespace: $ANSIBLE_NAMESPACE
 spec:
-  channel: alpha
+  channel: stable
   name: awx-operator
-  source: community-operators
+  source: awx-catalog
   sourceNamespace: openshift-marketplace
 EOF
 
     # Verify files exist
     log_info "Verifying local files..."
-    for file in "$LOCAL_GIT_DIR/tekton/operatorgroup.yaml" "$LOCAL_GIT_DIR/tekton/tekton-pipelines.yaml" "$LOCAL_GIT_DIR/awx/operatorgroup.yaml" "$LOCAL_GIT_DIR/awx/awx-operator.yaml"; do
+    for file in "$LOCAL_GIT_DIR/tekton/catalogsource.yaml" "$LOCAL_GIT_DIR/tekton/operatorgroup.yaml" "$LOCAL_GIT_DIR/tekton/tekton-pipelines.yaml" "$LOCAL_GIT_DIR/awx/catalogsource.yaml" "$LOCAL_GIT_DIR/awx/operatorgroup.yaml" "$LOCAL_GIT_DIR/awx/awx-operator.yaml"; do
         if [[ ! -f "$file" ]]; then
             error_exit "File $file was not created successfully."
         else
@@ -264,46 +294,36 @@ EOF
 
     # Force commit and push
     log_info "Committing changes to Git..."
-    git -C "$LOCAL_GIT_DIR" add .
-    git -C "$LOCAL_GIT_DIR" commit -m "Force update GitOps configuration with OperatorGroups for Tekton and AWX" || log_info "No changes to commit."
+    git add .
+    git commit -m "Deploy CI/CD env with Tekton and AWX from open-source catalogs" || log_info "No changes to commit."
     log_info "Pushing to GitHub..."
-    git -C "$LOCAL_GIT_DIR" push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH" --force || error_exit "Failed to push changes to GitHub."
+    git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH" --force || error_exit "Failed to push changes to GitHub."
     log_info "Git repository successfully updated."
 }
 
 # ========== VALIDATE AND CREATE NAMESPACES ==========
 validate_and_create_namespaces() {
     log_info "Validating and ensuring target namespaces exist..."
-
-    if oc get ns "$TEKTON_NAMESPACE" &>/dev/null; then
-        log_info "Namespace $TEKTON_NAMESPACE already exists."
-    else
-        log_info "Namespace $TEKTON_NAMESPACE not found, creating it..."
-        oc create namespace "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f - || error_exit "Failed to create namespace $TEKTON_NAMESPACE."
-        log_info "Namespace $TEKTON_NAMESPACE created successfully."
-    fi
-
-    if oc get ns "$ANSIBLE_NAMESPACE" &>/dev/null; then
-        log_info "Namespace $ANSIBLE_NAMESPACE already exists."
-    else
-        log_info "Namespace $ANSIBLE_NAMESPACE not found, creating it..."
-        oc create namespace "$ANSIBLE_NAMESPACE" --dry-run=client -o yaml | oc apply -f - || error_exit "Failed to create namespace $ANSIBLE_NAMESPACE."
-        log_info "Namespace $ANSIBLE_NAMESPACE created successfully."
-    fi
-
-    log_info "Namespace validation and setup complete."
+    for ns in "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE"; do
+        if oc get ns "$ns" &>/dev/null; then
+            log_info "Namespace $ns already exists."
+        else
+            log_info "Creating namespace $ns..."
+            oc create namespace "$ns" || error_exit "Failed to create namespace $ns."
+        fi
+    done
+    log_info "Namespace setup complete."
 }
 
-# ========== SYNC ARGOCD APPLICATION WITH RETRY ==========
+# ========== SYNC ARGOCD APPLICATION ==========
 sync_argocd_app() {
     local app_name="$1"
     local max_attempts=3
     local attempt=1
-    local timeout=300
 
     while [ $attempt -le $max_attempts ]; do
         log_info "Syncing $app_name (Attempt $attempt of $max_attempts)..."
-        if argocd app sync "$app_name" --timeout "$timeout"; then
+        if argocd app sync "$app_name" --force; then
             log_info "$app_name synced successfully."
             return 0
         else
@@ -322,26 +342,18 @@ create_argocd_apps() {
     log_info "Registering Git repository in ArgoCD..."
     argocd repo add "$GIT_REPO" --username "$GIT_USERNAME" --password "$GIT_TOKEN" || error_exit "Failed to add Git repo."
 
-    log_info "Checking if Tekton and AWX ArgoCD applications exist..."
-    if ! argocd app get tekton-app &>/dev/null; then
-        log_info "Creating Tekton ArgoCD application..."
-        argocd app create tekton-app --upsert \
-          --repo "$GIT_REPO" --path "tekton" \
-          --dest-server "https://kubernetes.default.svc" --dest-namespace "$TEKTON_NAMESPACE" \
-          --sync-policy automated || error_exit "Failed to create Tekton application."
-    else
-        log_info "Tekton application already exists."
-    fi
-
-    if ! argocd app get awx-app &>/dev/null; then
-        log_info "Creating AWX ArgoCD application..."
-        argocd app create awx-app --upsert \
-          --repo "$GIT_REPO" --path "awx" \
-          --dest-server "https://kubernetes.default.svc" --dest-namespace "$ANSIBLE_NAMESPACE" \
-          --sync-policy automated || error_exit "Failed to create AWX application."
-    else
-        log_info "AWX application already exists."
-    fi
+    log_info "Checking if ArgoCD applications exist..."
+    for app in "tekton-app" "awx-app"; do
+        if ! argocd app get "$app" &>/dev/null; then
+            log_info "Creating $app ArgoCD application..."
+            argocd app create "$app" --upsert \
+              --repo "$GIT_REPO" --path "${app%-app}" \
+              --dest-server "https://kubernetes.default.svc" --dest-namespace "${app%-app}" \
+              --sync-policy automated || error_exit "Failed to create $app application."
+        else
+            log_info "$app application already exists."
+        fi
+    done
 
     log_info "Syncing ArgoCD applications..."
     sync_argocd_app "tekton-app"
@@ -364,15 +376,7 @@ create_argocd_apps
 TEKTON_URL=$(oc get routes -n "$TEKTON_NAMESPACE" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "Not Available")
 AWX_URL=$(oc get routes -n "$ANSIBLE_NAMESPACE" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "Not Available")
 
-log_info "✅ GitOps deployment completed successfully!"
+log_info "✅ GitOps CI/CD deployment completed successfully!"
 log_info "📌 ArgoCD UI: https://$SERVER_URL"
-if [[ "$TEKTON_URL" != "Not Available" ]]; then
-    log_info "📌 Tekton UI: https://$TEKTON_URL"
-else
-    log_error "⚠️ Tekton URL not found. Deployment might have failed."
-fi
-if [[ "$AWX_URL" != "Not Available" ]]; then
-    log_info "📌 AWX UI: https://$AWX_URL"
-else
-    log_error "⚠️ AWX URL not found. Deployment might have failed."
-fi
+log_info "📌 Tekton UI: ${TEKTON_URL:+https://$TEKTON_URL} (Not Available if no route)"
+log_info "📌 AWX UI: ${AWX_URL:+https://$AWX_URL} (Not Available if no route)"

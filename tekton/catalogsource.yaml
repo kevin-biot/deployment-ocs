@@ -1,0 +1,13 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: CatalogSource
+metadata:
+  name: tektoncd-catalog
+  namespace: openshift-marketplace
+spec:
+  sourceType: grpc
+  image: quay.io/tekton/operator-catalog:latest
+  displayName: TektonCD Upstream Catalog
+  publisher: TektonCD
+  updateStrategy:
+    registryPoll:
+      interval: 30m
