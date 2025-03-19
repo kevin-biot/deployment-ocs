@@ -7,12 +7,10 @@ spec:
   project: default
   source:
     repoURL: https://github.com/kevin-biot/deployment-ocs.git
-    targetRevision: main
     path: awx
+    targetRevision: main
   destination:
     server: https://kubernetes.default.svc
     namespace: awx
   syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+    automated: {}
