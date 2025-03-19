@@ -88,7 +88,7 @@ wait_for_pods() {
         while true; do
             RUNNING_COUNT=$(oc get pods -n "$namespace" --no-headers 2>/dev/null | grep -c "Running")
             TOTAL_COUNT=$(oc get pods -n "$namespace" --no-headers 2>/dev/null | wc -l)
-            if [[ "$RUNNING_COUNT" -gt 0 && "$RUNNING_COUNT" -eq "$TOTAL_COUNT" ]]; then
+            if [[ "$RUNNING_COUNT" -gt 0 && "$RUNING_COUNT" -eq "$TOTAL_COUNT" ]]; then
                 log_info "All pods in $namespace are running."
                 return 0
             fi
@@ -257,6 +257,29 @@ validate_and_create_namespaces() {
     log_info "Namespace validation and setup complete."
 }
 
+# ========== SYNC ARGOCD APPLICATION WITH RETRY ==========
+sync_argocd_app() {
+    local app_name="$1"
+    local max_attempts=3
+    local attempt=1
+    local timeout=300
+
+    while [ $attempt -le $max_attempts ]; do
+        log_info "Syncing $app_name (Attempt $attempt of $max_attempts)..."
+        if argocd app sync "$app_name" --timeout "$timeout"; then
+            log_info "$app_name synced successfully."
+            return 0
+        else
+            log_error "Failed to sync $app_name on attempt $attempt."
+            if [ $attempt -eq $max_attempts ]; then
+                error_exit "Failed to sync $app_name after $max_attempts attempts."
+            fi
+            sleep 10  # Wait before retrying
+            ((attempt++))
+        fi
+    done
+}
+
 # ========== CREATE ARGOCD APPLICATIONS ==========
 create_argocd_apps() {
     log_info "Registering Git repository in ArgoCD..."
@@ -284,8 +307,8 @@ create_argocd_apps() {
     fi
 
     log_info "Syncing ArgoCD applications..."
-    argocd app sync tekton-app --timeout 300 || error_exit "Failed to sync Tekton application."
-    argocd app sync awx-app --timeout 300 || error_exit "Failed to sync AWX application."
+    sync_argocd_app "tekton-app"
+    sync_argocd_app "awx-app"
 
     log_info "Waiting for Tekton deployment..."
     wait_for_pods "$TEKTON_NAMESPACE"
@@ -298,7 +321,7 @@ check_dependencies
 verify_gitops
 login_argocd
 setup_git
-validate_and_create_namespaces  # Updated function name
+validate_and_create_namespaces
 create_argocd_apps
 
 TEKTON_URL=$(oc get routes -n "$TEKTON_NAMESPACE" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "Not Available")
