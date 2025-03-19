@@ -8,3 +8,8 @@
 \e[32m[INFO] Logged into ArgoCD.\e[0m
 \e[32m[INFO] Creating required YAML files...\e[0m
 \e[32m[INFO] YAML files created. Committing and pushing to Git.\e[0m
+\e[32m[INFO] OpenShift login verified.\e[0m
+\e[32m[INFO] ArgoCD verified.\e[0m
+\e[32m[INFO] Logged into ArgoCD.\e[0m
+\e[32m[INFO] Created directories.\e[0m
+\e[32m[INFO] YAML files created.\e[0m
