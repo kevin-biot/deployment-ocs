@@ -232,6 +232,31 @@ EOF
     log_info "Git repository successfully updated."
 }
 
+# ========== VALIDATE AND CREATE NAMESPACES ==========
+validate_and_create_namespaces() {
+    log_info "Validating and ensuring target namespaces exist..."
+
+    # Check and create Tekton namespace
+    if oc get ns "$TEKTON_NAMESPACE" &>/dev/null; then
+        log_info "Namespace $TEKTON_NAMESPACE already exists."
+    else
+        log_info "Namespace $TEKTON_NAMESPACE not found, creating it..."
+        oc create namespace "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f - || error_exit "Failed to create namespace $TEKTON_NAMESPACE."
+        log_info "Namespace $TEKTON_NAMESPACE created successfully."
+    fi
+
+    # Check and create AWX namespace
+    if oc get ns "$ANSIBLE_NAMESPACE" &>/dev/null; then
+        log_info "Namespace $ANSIBLE_NAMESPACE already exists."
+    else
+        log_info "Namespace $ANSIBLE_NAMESPACE not found, creating it..."
+        oc create namespace "$ANSIBLE_NAMESPACE" --dry-run=client -o yaml | oc apply -f - || error_exit "Failed to create namespace $ANSIBLE_NAMESPACE."
+        log_info "Namespace $ANSIBLE_NAMESPACE created successfully."
+    fi
+
+    log_info "Namespace validation and setup complete."
+}
+
 # ========== CREATE ARGOCD APPLICATIONS ==========
 create_argocd_apps() {
     log_info "Registering Git repository in ArgoCD..."
@@ -273,6 +298,7 @@ check_dependencies
 verify_gitops
 login_argocd
 setup_git
+validate_and_create_namespaces  # Updated function name
 create_argocd_apps
 
 TEKTON_URL=$(oc get routes -n "$TEKTON_NAMESPACE" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "Not Available")
