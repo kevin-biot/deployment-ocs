@@ -4,7 +4,6 @@ metadata:
   name: tekton-app
   namespace: openshift-gitops
 spec:
-  project: default
   source:
     repoURL: https://github.com/kevin-biot/deployment-ocs.git
     targetRevision: main

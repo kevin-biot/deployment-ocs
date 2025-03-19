@@ -1,9 +1,9 @@
-\e[32m[INFO] Checking OpenShift login...\e[0m
-\e[32m[INFO] OpenShift login verified.\e[0m
-\e[32m[INFO] Creating Tekton Subscription YAML...\e[0m
-\e[32m[INFO] Creating AWX Subscription YAML...\e[0m
-\e[32m[INFO] Creating Tekton ArgoCD Application YAML...\e[0m
-\e[32m[INFO] Creating AWX ArgoCD Application YAML...\e[0m
-\e[32m[INFO] Deployment completed successfully.\e[0m
-\e[32m[INFO] Verify Tekton: oc get pods -n openshift-pipelines\e[0m
-\e[32m[INFO] Verify AWX: oc get pods -n awx\e[0m
+\e[32m[INFO] Checking dependencies...\e[0m
+\e[32m[INFO] All dependencies verified.\e[0m
+\e[32m[INFO] Cleaning up old CatalogSources...\e[0m
+\e[32m[INFO] Verifying ArgoCD...\e[0m
+\e[32m[INFO] Waiting for pods in openshift-gitops...\e[0m
+\e[32m[INFO] openshift-gitops pods are running\e[0m
+\e[32m[INFO] Logging into ArgoCD...\e[0m
+\e[32m[INFO] Creating ArgoCD App YAMLs...\e[0m
+\e[32m[INFO] Creating shared CatalogSource...\e[0m
