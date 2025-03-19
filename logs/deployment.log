@@ -11,8 +11,3 @@
 \e[32m[INFO] Logging into ArgoCD...\e[0m
 \e[32m[INFO] Setting up Git repository...\e[0m
 \e[32m[INFO] Ensuring repo contains necessary files...\e[0m
-\e[32m[INFO] Git repository successfully updated.\e[0m
-\e[32m[INFO] Registering Git repository in ArgoCD...\e[0m
-\e[32m[INFO] Checking if Tekton and AWX ArgoCD applications exist...\e[0m
-\e[32m[INFO] Creating Tekton ArgoCD application...\e[0m
-\e[31m[ERROR] Failed to create Tekton application.\e[0m

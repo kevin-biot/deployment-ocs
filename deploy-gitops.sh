@@ -33,7 +33,7 @@ error_exit() { log_error "$1"; exit 1; }
 # ========== CHECK DEPENDENCIES ==========
 check_dependencies() {
     log_info "Checking dependencies..."
-    for cmd in oc argocd git; do  # Removed yamllint as optional
+    for cmd in oc argocd git; do
         if ! command -v "$cmd" &>/dev/null; then
             log_error "Missing required command: $cmd"
             error_exit "Please install $cmd before running the script."
@@ -227,7 +227,7 @@ EOF
     fi
 
     git -C "$LOCAL_GIT_DIR" add .
-    git -C "$LOCAL_GIT_DIR" commit -m "Initialize GitOps configuration for Tekton and AWX" || true  # Ignore if nothing to commit
+    git -C "$LOCAL_GIT_DIR" commit -m "Initialize GitOps configuration for Tekton and AWX" || true
     git -C "$LOCAL_GIT_DIR" push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH" || error_exit "Failed to push changes to GitHub."
     log_info "Git repository successfully updated."
 }
@@ -241,8 +241,8 @@ create_argocd_apps() {
     if ! argocd app get tekton-app &>/dev/null; then
         log_info "Creating Tekton ArgoCD application..."
         argocd app create tekton-app --upsert \
-          --repo "$GIT_REPO" --path "argocd/tekton-app.yaml" \
-          --dest-server "https://kubernetes.default.svc" --dest-namespace "$ARGO_NAMESPACE" \
+          --repo "$GIT_REPO" --path "tekton" \
+          --dest-server "https://kubernetes.default.svc" --dest-namespace "$TEKTON_NAMESPACE" \
           --sync-policy automated || error_exit "Failed to create Tekton application."
     else
         log_info "Tekton application already exists."
@@ -251,8 +251,8 @@ create_argocd_apps() {
     if ! argocd app get awx-app &>/dev/null; then
         log_info "Creating AWX ArgoCD application..."
         argocd app create awx-app --upsert \
-          --repo "$GIT_REPO" --path "argocd/awx-app.yaml" \
-          --dest-server "https://kubernetes.default.svc" --dest-namespace "$ARGO_NAMESPACE" \
+          --repo "$GIT_REPO" --path "awx" \
+          --dest-server "https://kubernetes.default.svc" --dest-namespace "$ANSIBLE_NAMESPACE" \
           --sync-policy automated || error_exit "Failed to create AWX application."
     else
         log_info "AWX application already exists."
@@ -270,9 +270,9 @@ create_argocd_apps() {
 
 # ========== MAIN DEPLOYMENT ==========
 check_dependencies
-verify_gitops  # Added to ensure ArgoCD is running
+verify_gitops
 login_argocd
-setup_git     # Added to configure Git repo
+setup_git
 create_argocd_apps
 
 TEKTON_URL=$(oc get routes -n "$TEKTON_NAMESPACE" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "Not Available")
