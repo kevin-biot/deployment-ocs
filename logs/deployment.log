@@ -303,3 +303,20 @@
 \e[32m[INFO] Creating required YAML files...\e[0m
 \e[32m[INFO] YAML files created.\e[0m
 \e[32m[INFO] Committing and pushing YAML files...\e[0m
+\e[32m[INFO] Changes pushed.\e[0m
+\e[32m[INFO] ✅ GitOps configuration complete! ArgoCD will now manage the deployment.\e[0m
+\e[32m[INFO] Checking dependencies...\e[0m
+\e[32m[INFO] Dependencies verified.\e[0m
+\e[32m[INFO] Verifying OpenShift login...\e[0m
+\e[32m[INFO] OpenShift login verified.\e[0m
+\e[32m[INFO] Verifying ArgoCD...\e[0m
+\e[32m[INFO] ArgoCD verified.\e[0m
+\e[32m[INFO] Logging into ArgoCD CLI...\e[0m
+\e[32m[INFO] Logged into ArgoCD CLI.\e[0m
+\e[32m[INFO] Ensuring ArgoCD has Git credentials...\e[0m
+\e[32m[INFO] ArgoCD Git credentials configured.\e[0m
+\e[32m[INFO] Creating required directories...\e[0m
+\e[32m[INFO] Directories created.\e[0m
+\e[32m[INFO] Creating required YAML files...\e[0m
+\e[32m[INFO] YAML files created.\e[0m
+\e[32m[INFO] Committing and pushing YAML files...\e[0m
