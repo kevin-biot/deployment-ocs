@@ -261,3 +261,14 @@
 \e[32m[INFO] Creating TektonPipeline and AWX instance...\e[0m
 \e[32m[INFO] TektonPipeline and AWX instance YAML files created.\e[0m
 \e[32m[INFO] Committing and pushing YAML files...\e[0m
+\e[32m[INFO] Verifying OpenShift login...\e[0m
+\e[32m[INFO] OpenShift login verified.\e[0m
+\e[32m[INFO] Verifying ArgoCD...\e[0m
+\e[32m[INFO] ArgoCD verified.\e[0m
+\e[32m[INFO] Ensuring ArgoCD has Git credentials...\e[0m
+\e[32m[INFO] ArgoCD Git credentials already configured.\e[0m
+\e[32m[INFO] Creating required directories...\e[0m
+\e[32m[INFO] Directories created.\e[0m
+\e[32m[INFO] Creating required YAML files...\e[0m
+\e[32m[INFO] YAML files created.\e[0m
+\e[32m[INFO] Committing and pushing YAML files...\e[0m
