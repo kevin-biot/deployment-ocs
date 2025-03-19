@@ -4,3 +4,6 @@
 \e[32m[INFO] Creating AWX Subscription YAML...\e[0m
 \e[32m[INFO] Creating Tekton ArgoCD Application YAML...\e[0m
 \e[32m[INFO] Creating AWX ArgoCD Application YAML...\e[0m
+\e[32m[INFO] Deployment completed successfully.\e[0m
+\e[32m[INFO] Verify Tekton: oc get pods -n openshift-pipelines\e[0m
+\e[32m[INFO] Verify AWX: oc get pods -n awx\e[0m
