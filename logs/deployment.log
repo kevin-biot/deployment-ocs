@@ -1,53 +1,6 @@
-\e[32m[INFO] Checking OpenShift login status...\e[0m
+\e[32m[INFO] Checking OpenShift login...\e[0m
 \e[32m[INFO] OpenShift login verified.\e[0m
-\e[32m[INFO] Correct directory detected.\e[0m
-\e[32m[INFO] Checking dependencies...\e[0m
-\e[32m[INFO] All dependencies verified.\e[0m
-\e[32m[INFO] Cleaning up old CatalogSources for a known state...\e[0m
-\e[32m[INFO] awx-catalog not found in openshift-marketplace, skipping deletion.\e[0m
-\e[32m[INFO] tektoncd-catalog not found in openshift-marketplace, skipping deletion.\e[0m
-\e[32m[INFO] Old CatalogSource cleanup complete.\e[0m
-\e[32m[INFO] Verifying OpenShift GitOps (ArgoCD) is running...\e[0m
-\e[32m[INFO] Attempt 1 of 3: Waiting for pods in openshift-gitops...\e[0m
-\e[32m[INFO] All pods in openshift-gitops are running.\e[0m
-\e[32m[INFO] OpenShift GitOps (ArgoCD) verified as running in openshift-gitops.\e[0m
-\e[32m[INFO] Checking if already logged into ArgoCD...\e[0m
-\e[32m[INFO] Logging into ArgoCD...\e[0m
-\e[32m[INFO] Setting up Git repository...\e[0m
-\e[32m[INFO] Ensuring repo contains necessary files...\e[0m
-\e[32m[INFO] Creating tekton-app.yaml...\e[0m
-\e[32m[INFO] Creating awx-app.yaml...\e[0m
-\e[32m[INFO] Creating tekton/catalogsource.yaml...\e[0m
-\e[32m[INFO] Creating tekton/operatorgroup.yaml...\e[0m
-\e[32m[INFO] Creating tekton/tekton-pipelines.yaml...\e[0m
-\e[32m[INFO] Creating awx/operatorgroup.yaml...\e[0m
-\e[32m[INFO] Creating awx/awx-operator.yaml...\e[0m
-\e[32m[INFO] Verifying local files...\e[0m
-\e[32m[INFO] Confirmed /Users/kevinbrown/deployment-ocs/tekton/catalogsource.yaml exists.\e[0m
-\e[32m[INFO] Confirmed /Users/kevinbrown/deployment-ocs/tekton/operatorgroup.yaml exists.\e[0m
-\e[32m[INFO] Confirmed /Users/kevinbrown/deployment-ocs/tekton/tekton-pipelines.yaml exists.\e[0m
-\e[32m[INFO] Confirmed /Users/kevinbrown/deployment-ocs/awx/operatorgroup.yaml exists.\e[0m
-\e[32m[INFO] Confirmed /Users/kevinbrown/deployment-ocs/awx/awx-operator.yaml exists.\e[0m
-\e[32m[INFO] Committing changes to Git...\e[0m
-\e[32m[INFO] Pushing to GitHub...\e[0m
-\e[32m[INFO] Git repository successfully updated.\e[0m
-\e[32m[INFO] Validating and ensuring target namespaces exist...\e[0m
-\e[32m[INFO] Namespace openshift-pipelines already exists.\e[0m
-\e[32m[INFO] Namespace awx already exists.\e[0m
-\e[32m[INFO] Namespace setup complete.\e[0m
-\e[32m[INFO] Registering Git repository in ArgoCD...\e[0m
-\e[32m[INFO] Checking if ArgoCD applications exist...\e[0m
-\e[32m[INFO] tekton-app application already exists.\e[0m
-\e[32m[INFO] awx-app application already exists.\e[0m
-\e[32m[INFO] Syncing ArgoCD applications...\e[0m
-\e[32m[INFO] Syncing tekton-app (Attempt 1 of 3)...\e[0m
-\e[32m[INFO] tekton-app synced successfully.\e[0m
-\e[32m[INFO] Syncing awx-app (Attempt 1 of 3)...\e[0m
-\e[32m[INFO] awx-app synced successfully.\e[0m
-\e[32m[INFO] Waiting for Tekton deployment...\e[0m
-\e[32m[INFO] Attempt 1 of 3: Waiting for pods in openshift-pipelines...\e[0m
-\e[32m[INFO] Checking dependencies...\e[0m
-\e[32m[INFO] All dependencies verified.\e[0m
-\e[32m[INFO] Verifying OpenShift GitOps (ArgoCD) is running...\e[0m
-\e[32m[INFO] Waiting for pods in openshift-gitops to be ready...\e[0m
-\e[32m[INFO] OpenShift GitOps verified.\e[0m
+\e[32m[INFO] Creating Tekton Subscription YAML...\e[0m
+\e[32m[INFO] Creating AWX Subscription YAML...\e[0m
+\e[32m[INFO] Creating Tekton ArgoCD Application YAML...\e[0m
+\e[32m[INFO] Creating AWX ArgoCD Application YAML...\e[0m

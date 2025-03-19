@@ -3,7 +3,7 @@
 # ============================
 # OpenShift GitOps Deployment Script
 # ============================
-# Deploys Tekton and AWX operators via GitOps principles using ArgoCD
+# Fully automated Tekton and AWX deployment using GitOps and ArgoCD
 
 set -euo pipefail
 trap cleanup_on_failure ERR
@@ -26,97 +26,145 @@ log_info() { echo -e "\e[32m[INFO] $1\e[0m" | tee -a "$DEPLOY_LOG"; }
 log_error() { echo -e "\e[31m[ERROR] $1\e[0m" | tee -a "$DEPLOY_LOG"; }
 error_exit() { log_error "$1"; exit 1; }
 
-# ========== CHECK DEPENDENCIES ==========
+# ========== DEPENDENCIES ==========
 check_dependencies() {
     log_info "Checking dependencies..."
     for cmd in oc argocd git; do
-        if ! command -v "$cmd" &>/dev/null; then
-            error_exit "Missing required command: $cmd. Please install it."
-        fi
+        command -v "$cmd" &>/dev/null || error_exit "$cmd is missing. Please install it."
     done
     log_info "All dependencies verified."
 }
 
-# ========== CLEANUP FUNCTION ==========
+# ========== CLEANUP ==========
+cleanup_old_catalogs() {
+    log_info "Cleaning old CatalogSources and Subscriptions..."
+    oc delete catalogsource awx-catalog tektoncd-catalog -n openshift-marketplace --ignore-not-found
+    oc delete subscription tektoncd-operator -n $TEKTON_NAMESPACE --ignore-not-found
+    oc delete subscription awx-operator -n $ANSIBLE_NAMESPACE --ignore-not-found
+}
+
 cleanup_on_failure() {
-    log_info "Cleaning up due to failure..."
-    read -t 30 -p "Proceed with forced cleanup of namespaces? (y/N): " confirm
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        oc delete ns "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE" --force --grace-period=0 --ignore-not-found
-        log_info "Cleanup complete."
-    else
-        log_info "Cleanup skipped by user request."
-    fi
+    log_error "Deployment failed, performing cleanup..."
+    oc delete subscription tektoncd-operator -n $TEKTON_NAMESPACE --ignore-not-found
+    oc delete subscription awx-operator -n $ANSIBLE_NAMESPACE --ignore-not-found
+    log_info "Cleanup completed."
 }
 
-# ========== WAIT FUNCTION ==========
-wait_for_pods() {
-    local namespace="$1"
-    log_info "Waiting for pods in $namespace to be ready..."
-    oc wait pods -n "$namespace" --all --for=condition=Ready --timeout=600s || error_exit "Pods in $namespace did not become ready in time."
-}
+# ========== SETUP ==========
+mkdir -p "$LOG_DIR"
+> "$DEPLOY_LOG"
 
-# ========== VERIFY OPENSHIFT LOGIN ==========
-oc whoami &>/dev/null || error_exit "Not logged into OpenShift!"
+[[ -z "$GIT_TOKEN" ]] && error_exit "GIT_TOKEN not set."
 
-# ========== VERIFY OPENSHIFT GITOPS ==========
-verify_gitops() {
-    log_info "Verifying OpenShift GitOps (ArgoCD) is running..."
-    oc get ns "$ARGO_NAMESPACE" &>/dev/null || error_exit "ArgoCD namespace missing. Install OpenShift GitOps first."
-    wait_for_pods "$ARGO_NAMESPACE"
-    log_info "OpenShift GitOps verified."
-}
+log_info "Checking OpenShift login..."
+oc whoami &>/dev/null || error_exit "OpenShift login required."
+log_info "OpenShift login verified."
 
-# ========== LOGIN ARGOCD ==========
-login_argocd() {
-    SERVER_URL=$(oc get route openshift-gitops-server -n "$ARGO_NAMESPACE" -o jsonpath='{.spec.host}')
-    ADMIN_PASSWD=$(oc get secret openshift-gitops-cluster -n "$ARGO_NAMESPACE" -o jsonpath='{.data.admin\.password}' | base64 -d)
-    argocd login "$SERVER_URL" --username admin --password "$ADMIN_PASSWD" --insecure --grpc-web
-}
+cd "$LOCAL_GIT_DIR" || error_exit "Directory $LOCAL_GIT_DIR not found!"
 
-# ========== SETUP GIT ==========
-setup_git() {
-    cd "$LOCAL_GIT_DIR"
-    git pull origin "$GIT_BRANCH"
-    git add .
-    git commit -m "Updated Tekton and AWX deployment configuration" || true
-    git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH"
-}
+# ========== YAML CREATION ==========
+log_info "Creating Tekton Subscription YAML..."
+mkdir -p tekton
+cat <<EOF > tekton/tekton-pipelines.yaml
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: tektoncd-operator
+  namespace: $TEKTON_NAMESPACE
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: tektoncd-operator
+  source: community-operators
+  sourceNamespace: openshift-marketplace
+EOF
 
-# ========== CREATE NAMESPACES ==========
+log_info "Creating AWX Subscription YAML..."
+mkdir -p awx
+cat <<EOF > awx/awx-operator.yaml
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: awx-operator
+  namespace: $ANSIBLE_NAMESPACE
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: awx-operator
+  source: community-operators
+  sourceNamespace: openshift-marketplace
+EOF
+
+# ========== ARGOCD APPS YAML ==========
+mkdir -p argocd
+log_info "Creating Tekton ArgoCD Application YAML..."
+cat <<EOF > argocd/tekton-app.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tekton-app
+  namespace: $ARGO_NAMESPACE
+spec:
+  project: default
+  source:
+    repoURL: $GIT_REPO
+    targetRevision: $GIT_BRANCH
+    path: tekton
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: $TEKTON_NAMESPACE
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+EOF
+
+log_info "Creating AWX ArgoCD Application YAML..."
+cat <<EOF > argocd/awx-app.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: awx-app
+  namespace: $ARGO_NAMESPACE
+spec:
+  project: default
+  source:
+    repoURL: $GIT_REPO
+    targetRevision: $GIT_BRANCH
+    path: awx
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: $ANSIBLE_NAMESPACE
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+EOF
+
+# ========== GIT ==========
+git add .
+git commit -m "Automated Tekton and AWX deployment"
+git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH"
+
+# ========== NAMESPACE ==========
 for ns in "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE"; do
     oc get ns "$ns" &>/dev/null || oc create ns "$ns"
 done
 
-# ========== CREATE ARGOCD APPLICATIONS ==========
-create_argocd_apps() {
-    argocd repo add "$GIT_REPO" --username "$GIT_USERNAME" --password "$GIT_TOKEN" --upsert
+# ========== ARGOCD ==========
+argocd repo add "$GIT_REPO" --username "$GIT_USERNAME" --password "$GIT_TOKEN" || true
 
-    for app in tekton awx; do
-        argocd app create "${app}-app" --upsert \
-          --repo "$GIT_REPO" --path "$app" \
-          --dest-server "https://kubernetes.default.svc" --dest-namespace "${app%-app}" \
-          --sync-policy automated
+for app in tekton-app awx-app; do
+  argocd app create "$app" \
+    --repo "$GIT_REPO" --path "${app%-app}" \
+    --dest-server "https://kubernetes.default.svc" \
+    --dest-namespace "${app%-app}" \
+    --sync-policy automated --upsert
 
-        argocd app sync "${app}-app" --prune --force
-    done
+  argocd app sync "$app" --prune --force
+done
 
-    wait_for_pods "$TEKTON_NAMESPACE"
-    wait_for_pods "$ANSIBLE_NAMESPACE"
-}
-
-# ========== MAIN DEPLOYMENT ==========
-check_dependencies
-verify_gitops
-login_argocd
-setup_git
-create_argocd_apps
-
-TEKTON_URL=$(oc get routes -n "$TEKTON_NAMESPACE" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "Not Available")
-AWX_URL=$(oc get routes -n "$ANSIBLE_NAMESPACE" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || echo "Not Available")
-
-log_info "✅ GitOps deployment completed successfully!"
-log_info "📌 ArgoCD UI: https://$SERVER_URL"
-log_info "📌 Tekton UI: ${TEKTON_URL:+https://$TEKTON_URL}"
-log_info "📌 AWX UI: ${AWX_URL:+https://$AWX_URL}"
+log_info "Deployment completed successfully."
+log_info "Verify Tekton: oc get pods -n $TEKTON_NAMESPACE"
+log_info "Verify AWX: oc get pods -n $ANSIBLE_NAMESPACE"
 
