@@ -88,7 +88,7 @@ wait_for_pods() {
         while true; do
             RUNNING_COUNT=$(oc get pods -n "$namespace" --no-headers 2>/dev/null | grep -c "Running")
             TOTAL_COUNT=$(oc get pods -n "$namespace" --no-headers 2>/dev/null | wc -l)
-            if [[ "$RUNNING_COUNT" -gt 0 && "$RUNING_COUNT" -eq "$TOTAL_COUNT" ]]; then
+            if [[ "$RUNNING_COUNT" -gt 0 && "$RUNNING_COUNT" -eq "$TOTAL_COUNT" ]]; then
                 log_info "All pods in $namespace are running."
                 return 0
             fi
