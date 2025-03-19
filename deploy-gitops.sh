@@ -23,7 +23,7 @@ LOG_DIR="$LOCAL_GIT_DIR/logs"
 DEPLOY_LOG="$LOG_DIR/deployment.log"
 
 GIT_USERNAME="${GIT_USERNAME:-kevin-biot}"
-GIT_TOKEN="${GIT_TOKEN:-}" # Expect token to be set as environment variable
+GIT_TOKEN="${GIT_TOKEN:-}"
 
 # ========== UTILITIES ==========
 log_info() { echo -e "\e[32m[INFO] $1\e[0m" | tee -a "$DEPLOY_LOG"; }
@@ -148,9 +148,10 @@ setup_git() {
     fi
 
     log_info "Ensuring repo contains necessary files..."
-    mkdir -p "$LOCAL_GIT_DIR/argocd"
+    mkdir -p "$LOCAL_GIT_DIR/argocd" "$LOCAL_GIT_DIR/tekton" "$LOCAL_GIT_DIR/awx"
 
     # Tekton Application YAML
+    log_info "Creating tekton-app.yaml..."
     cat <<EOF > "$LOCAL_GIT_DIR/argocd/tekton-app.yaml"
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -173,6 +174,7 @@ spec:
 EOF
 
     # AWX Application YAML
+    log_info "Creating awx-app.yaml..."
     cat <<EOF > "$LOCAL_GIT_DIR/argocd/awx-app.yaml"
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -194,10 +196,22 @@ spec:
       selfHeal: true
 EOF
 
-    # Add basic manifests if directories don’t exist
-    mkdir -p "$LOCAL_GIT_DIR/tekton" "$LOCAL_GIT_DIR/awx"
-    if [[ ! -f "$LOCAL_GIT_DIR/tekton/tekton-pipelines.yaml" ]]; then
-        cat <<EOF > "$LOCAL_GIT_DIR/tekton/tekton-pipelines.yaml"
+    # Tekton OperatorGroup
+    log_info "Creating tekton/operatorgroup.yaml..."
+    cat <<EOF > "$LOCAL_GIT_DIR/tekton/operatorgroup.yaml"
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: tekton-operator-group
+  namespace: $TEKTON_NAMESPACE
+spec:
+  targetNamespaces:
+  - $TEKTON_NAMESPACE
+EOF
+
+    # Tekton Subscription
+    log_info "Creating tekton/tekton-pipelines.yaml..."
+    cat <<EOF > "$LOCAL_GIT_DIR/tekton/tekton-pipelines.yaml"
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
@@ -209,10 +223,23 @@ spec:
   source: redhat-operators
   sourceNamespace: openshift-marketplace
 EOF
-    fi
 
-    if [[ ! -f "$LOCAL_GIT_DIR/awx/awx-operator.yaml" ]]; then
-        cat <<EOF > "$LOCAL_GIT_DIR/awx/awx-operator.yaml"
+    # AWX OperatorGroup
+    log_info "Creating awx/operatorgroup.yaml..."
+    cat <<EOF > "$LOCAL_GIT_DIR/awx/operatorgroup.yaml"
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: awx-operator-group
+  namespace: $ANSIBLE_NAMESPACE
+spec:
+  targetNamespaces:
+  - $ANSIBLE_NAMESPACE
+EOF
+
+    # AWX Subscription
+    log_info "Creating awx/awx-operator.yaml..."
+    cat <<EOF > "$LOCAL_GIT_DIR/awx/awx-operator.yaml"
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
@@ -224,11 +251,23 @@ spec:
   source: community-operators
   sourceNamespace: openshift-marketplace
 EOF
-    fi
 
+    # Verify files exist
+    log_info "Verifying local files..."
+    for file in "$LOCAL_GIT_DIR/tekton/operatorgroup.yaml" "$LOCAL_GIT_DIR/tekton/tekton-pipelines.yaml" "$LOCAL_GIT_DIR/awx/operatorgroup.yaml" "$LOCAL_GIT_DIR/awx/awx-operator.yaml"; do
+        if [[ ! -f "$file" ]]; then
+            error_exit "File $file was not created successfully."
+        else
+            log_info "Confirmed $file exists."
+        fi
+    done
+
+    # Force commit and push
+    log_info "Committing changes to Git..."
     git -C "$LOCAL_GIT_DIR" add .
-    git -C "$LOCAL_GIT_DIR" commit -m "Initialize GitOps configuration for Tekton and AWX" || true
-    git -C "$LOCAL_GIT_DIR" push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH" || error_exit "Failed to push changes to GitHub."
+    git -C "$LOCAL_GIT_DIR" commit -m "Force update GitOps configuration with OperatorGroups for Tekton and AWX" || log_info "No changes to commit."
+    log_info "Pushing to GitHub..."
+    git -C "$LOCAL_GIT_DIR" push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH" --force || error_exit "Failed to push changes to GitHub."
     log_info "Git repository successfully updated."
 }
 
@@ -236,7 +275,6 @@ EOF
 validate_and_create_namespaces() {
     log_info "Validating and ensuring target namespaces exist..."
 
-    # Check and create Tekton namespace
     if oc get ns "$TEKTON_NAMESPACE" &>/dev/null; then
         log_info "Namespace $TEKTON_NAMESPACE already exists."
     else
@@ -245,7 +283,6 @@ validate_and_create_namespaces() {
         log_info "Namespace $TEKTON_NAMESPACE created successfully."
     fi
 
-    # Check and create AWX namespace
     if oc get ns "$ANSIBLE_NAMESPACE" &>/dev/null; then
         log_info "Namespace $ANSIBLE_NAMESPACE already exists."
     else
@@ -274,7 +311,7 @@ sync_argocd_app() {
             if [ $attempt -eq $max_attempts ]; then
                 error_exit "Failed to sync $app_name after $max_attempts attempts."
             fi
-            sleep 10  # Wait before retrying
+            sleep 10
             ((attempt++))
         fi
     done
