@@ -78,6 +78,45 @@ cleanup_on_failure() {
     fi
 }
 
+# ========== WAIT FOR PODS ==========
+wait_for_pods() {
+    local namespace="$1"
+    local TIMEOUT=300
+    local INTERVAL=10
+    local RETRIES=3
+    local attempt=1
+
+    while [ $attempt -le $RETRIES ]; do
+        local elapsed=0
+        log_info "Attempt $attempt of $RETRIES: Waiting for pods in $namespace..."
+        
+        while true; do
+            RUNNING_COUNT=$(oc get pods -n "$namespace" --no-headers 2>/dev/null | grep -c "Running")
+            TOTAL_COUNT=$(oc get pods -n "$namespace" --no-headers 2>/dev/null | wc -l)
+
+            if [[ "$RUNNING_COUNT" -gt 0 && "$RUNNING_COUNT" -eq "$TOTAL_COUNT" ]]; then
+                log_info "All pods in $namespace are running."
+                return 0
+            fi
+
+            if [[ "$elapsed" -ge "$TIMEOUT" ]]; then
+                log_error "Attempt $attempt: Pods in $namespace did not start within $TIMEOUT seconds"
+                break
+            fi
+
+            sleep "$INTERVAL"
+            elapsed=$((elapsed + INTERVAL))
+            log_info "Waiting for pods in $namespace... ($elapsed/$TIMEOUT seconds elapsed)"
+        done
+        
+        if [ $attempt -eq $RETRIES ]; then
+            error_exit "Failed to start pods in $namespace after $RETRIES attempts"
+        fi
+        ((attempt++))
+        sleep 5
+    done
+}
+
 # ========== VERIFY OPENSHIFT GITOPS ==========
 verify_gitops() {
     log_info "Verifying OpenShift GitOps (ArgoCD) is running..."
@@ -136,36 +175,11 @@ setup_git() {
     log_info "Git repository successfully updated."
 }
 
-# ========== CREATE ARGOCD APPLICATIONS ==========
-create_argocd_apps() {
-    log_info "Registering Git repository in ArgoCD..."
-    argocd repo add "$GIT_REPO" --username "$GIT_USERNAME" --password "$GIT_TOKEN" || error_exit "Failed to add Git repo."
-
-    log_info "Checking if ArgoCD has access to Git repository..."
-    if ! argocd repo list | grep -q "$GIT_REPO"; then
-        error_exit "ArgoCD does not have access to the Git repository!"
-    fi
-
-    log_info "Creating ArgoCD applications from GitHub..."
-    argocd app create tekton-app --upsert \
-      --repo "$GIT_REPO" --path "argocd/tekton-app.yaml" \
-      --dest-server "https://kubernetes.default.svc" --dest-namespace "$TEKTON_NAMESPACE" \
-      --sync-policy automated || error_exit "Failed to create Tekton application."
-
-    argocd app create awx-app --upsert \
-      --repo "$GIT_REPO" --path "argocd/awx-app.yaml" \
-      --dest-server "https://kubernetes.default.svc" --dest-namespace "$ANSIBLE_NAMESPACE" \
-      --sync-policy automated || error_exit "Failed to create AWX application."
-
-    log_info "ArgoCD applications created successfully."
-}
-
 # ========== MAIN DEPLOYMENT ==========
 check_dependencies
 verify_gitops
 login_argocd
 setup_git
-create_argocd_apps
 
 log_info "✅ GitOps deployment completed successfully!"
 log_info "📌 ArgoCD UI: https://$SERVER_URL"

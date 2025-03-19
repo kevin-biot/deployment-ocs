@@ -4,5 +4,10 @@
 \e[32m[INFO] Checking dependencies...\e[0m
 \e[32m[INFO] All dependencies verified.\e[0m
 \e[32m[INFO] Verifying OpenShift GitOps (ArgoCD) is running...\e[0m
-\e[32m[INFO] Cleaning up due to failure...\e[0m
-\e[32m[INFO] Cleanup complete.\e[0m
+\e[32m[INFO] Attempt 1 of 3: Waiting for pods in openshift-gitops...\e[0m
+\e[32m[INFO] All pods in openshift-gitops are running.\e[0m
+\e[32m[INFO] OpenShift GitOps (ArgoCD) verified as running in openshift-gitops.\e[0m
+\e[32m[INFO] Checking if already logged into ArgoCD...\e[0m
+\e[32m[INFO] Logging into ArgoCD...\e[0m
+\e[32m[INFO] Setting up Git repository...\e[0m
+\e[32m[INFO] Ensuring repo contains necessary files...\e[0m
