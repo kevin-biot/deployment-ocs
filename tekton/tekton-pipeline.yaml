@@ -3,4 +3,3 @@ kind: TektonPipeline
 metadata:
   name: pipeline
   namespace: openshift-pipelines
-spec: {}

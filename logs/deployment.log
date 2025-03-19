@@ -272,3 +272,12 @@
 \e[32m[INFO] Creating required YAML files...\e[0m
 \e[32m[INFO] YAML files created.\e[0m
 \e[32m[INFO] Committing and pushing YAML files...\e[0m
+\e[32m[INFO] Checking dependencies...\e[0m
+\e[32m[INFO] Dependencies verified.\e[0m
+\e[32m[INFO] Verifying ArgoCD...\e[0m
+\e[32m[INFO] ArgoCD verified.\e[0m
+\e[32m[INFO] Creating required directories...\e[0m
+\e[32m[INFO] Directories created.\e[0m
+\e[32m[INFO] Creating required YAML files...\e[0m
+\e[32m[INFO] YAML files created.\e[0m
+\e[32m[INFO] Committing and pushing YAML files...\e[0m
