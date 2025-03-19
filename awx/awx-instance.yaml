@@ -3,6 +3,4 @@ kind: AWX
 metadata:
   name: awx-instance
   namespace: awx
-spec:
-  service_type: NodePort
-  ingress_type: Route
+spec: {}

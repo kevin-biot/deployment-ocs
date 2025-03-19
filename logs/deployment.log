@@ -89,3 +89,30 @@
 \e[32m[INFO] Creating required YAML files...\e[0m
 \e[32m[INFO] YAML files created.\e[0m
 \e[32m[INFO] Committing and pushing YAML files to Git...\e[0m
+\e[32m[INFO] Changes pushed.\e[0m
+\e[32m[INFO] Setting up RBAC for ArgoCD service account...\e[0m
+\e[32m[INFO] RBAC RoleBindings configured.\e[0m
+\e[32m[INFO] Syncing ArgoCD app: tekton-app (Attempt 1)...\e[0m
+\e[31m[ERROR] tekton-app sync failed on attempt 1.\e[0m
+\e[32m[INFO] Syncing ArgoCD app: tekton-app (Attempt 2)...\e[0m
+\e[31m[ERROR] tekton-app sync failed on attempt 2.\e[0m
+\e[32m[INFO] Syncing ArgoCD app: tekton-app (Attempt 3)...\e[0m
+\e[31m[ERROR] tekton-app sync failed on attempt 3.\e[0m
+\e[31m[ERROR] tekton-app failed to sync after 3 attempts.\e[0m
+\e[32m[INFO] Checking dependencies...\e[0m
+\e[32m[INFO] Dependencies verified.\e[0m
+\e[32m[INFO] Verifying OpenShift login...\e[0m
+\e[32m[INFO] OpenShift login verified.\e[0m
+\e[32m[INFO] Verifying ArgoCD...\e[0m
+\e[32m[INFO] ArgoCD verified.\e[0m
+\e[32m[INFO] Logging into ArgoCD CLI...\e[0m
+\e[32m[INFO] Logged into ArgoCD CLI.\e[0m
+\e[32m[INFO] Ensuring ArgoCD has Git credentials...\e[0m
+\e[32m[INFO] ArgoCD Git credentials already configured.\e[0m
+\e[32m[INFO] Waiting for Tekton and AWX Operators to be ready...\e[0m
+\e[31m[ERROR] Tekton Operator not ready.\e[0m
+\e[31m[ERROR] AWX Operator not ready.\e[0m
+\e[32m[INFO] Tekton and AWX Operators are ready.\e[0m
+\e[32m[INFO] Applying TektonPipeline and AWX Custom Resources...\e[0m
+\e[32m[INFO] TektonPipeline and AWX Instance YAML files created.\e[0m
+\e[32m[INFO] Committing and pushing YAML files...\e[0m

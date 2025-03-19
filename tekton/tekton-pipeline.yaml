@@ -3,5 +3,4 @@ kind: TektonPipeline
 metadata:
   name: pipeline
   namespace: openshift-pipelines
-spec:
-  targetNamespace: openshift-pipelines
+spec: {}
