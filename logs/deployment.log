@@ -28,3 +28,12 @@
 \e[32m[INFO] Logging into ArgoCD CLI...\e[0m
 \e[32m[INFO] ArgoCD CLI login successful.\e[0m
 \e[32m[INFO] Creating required directories and YAML files...\e[0m
+\e[32m[INFO] Verifying OpenShift login...\e[0m
+\e[32m[INFO] OpenShift login verified.\e[0m
+\e[32m[INFO] Verifying ArgoCD in namespace openshift-gitops...\e[0m
+\e[32m[INFO] ArgoCD verified running.\e[0m
+\e[32m[INFO] Logging into ArgoCD CLI...\e[0m
+\e[32m[INFO] ArgoCD CLI login successful.\e[0m
+\e[32m[INFO] Ensuring ArgoCD has Git credentials configured...\e[0m
+\e[32m[INFO] ArgoCD Git credentials already set.\e[0m
+\e[32m[INFO] Creating required directories and YAML files...\e[0m
