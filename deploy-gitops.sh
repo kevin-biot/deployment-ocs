@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-# ========== CONFIGURATION ==========
+# Configuration
 GIT_REPO="https://github.com/kevin-biot/deployment-ocs.git"
 GIT_BRANCH="main"
 ARGO_NAMESPACE="openshift-gitops"
@@ -15,12 +15,12 @@ DEPLOY_LOG="$LOG_DIR/deployment.log"
 GIT_USERNAME="${GIT_USERNAME:-kevin-biot}"
 GIT_TOKEN="${GIT_TOKEN:-}"
 
-# ========== UTILITIES ==========
+# Utilities
 log_info() { echo -e "\e[32m[INFO] $1\e[0m" | tee -a "$DEPLOY_LOG"; }
 log_error() { echo -e "\e[31m[ERROR] $1\e[0m" | tee -a "$DEPLOY_LOG"; }
 error_exit() { log_error "$1"; exit 1; }
 
-# ========== CHECK DEPENDENCIES ==========
+# Ensure dependencies exist
 check_dependencies() {
     log_info "Checking dependencies..."
     for cmd in oc argocd git; do
@@ -29,21 +29,21 @@ check_dependencies() {
     log_info "Dependencies verified."
 }
 
-# ========== VERIFY OPENSHIFT LOGIN ==========
+# Verify OpenShift login
 verify_oc_login() {
     log_info "Verifying OpenShift login..."
     oc whoami >/dev/null || error_exit "Not logged into OpenShift."
     log_info "OpenShift login verified."
 }
 
-# ========== VERIFY ARGOCD ==========
+# Verify ArgoCD
 verify_argocd() {
     log_info "Verifying ArgoCD..."
     oc wait --for=condition=ready pod -l app.kubernetes.io/name=openshift-gitops-server -n "$ARGO_NAMESPACE" --timeout=600s
     log_info "ArgoCD verified."
 }
 
-# ========== LOGIN TO ARGOCD ==========
+# Login to ArgoCD
 login_argocd() {
     log_info "Logging into ArgoCD CLI..."
     ADMIN_PASSWD=$(oc get secret openshift-gitops-cluster -n "$ARGO_NAMESPACE" -o jsonpath='{.data.admin\.password}' | base64 -d)
@@ -52,7 +52,7 @@ login_argocd() {
     log_info "Logged into ArgoCD CLI."
 }
 
-# ========== ENSURE ARGOCD GIT CREDENTIALS ==========
+# Ensure ArgoCD has Git credentials
 ensure_argocd_git_credentials() {
     log_info "Ensuring ArgoCD has Git credentials..."
     if ! argocd repo list | grep -q "$GIT_REPO"; then
@@ -64,75 +64,55 @@ ensure_argocd_git_credentials() {
     fi
 }
 
-# ========== CREATE DIRECTORIES ==========
-create_directories() {
-    log_info "Creating required directories..."
-    mkdir -p "$LOCAL_GIT_DIR"/{argocd,tekton,awx,logs}
-    log_info "Directories created."
+# Ensure required namespaces exist
+ensure_namespaces() {
+    log_info "Ensuring required namespaces exist..."
+    oc apply -f - <<EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $TEKTON_NAMESPACE
+EOF
+    oc apply -f - <<EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $ANSIBLE_NAMESPACE
+EOF
+    log_info "Namespaces created/verified."
 }
 
-# ========== CREATE YAML FILES ==========
-create_yaml_files() {
-    log_info "Creating required YAML files..."
-
-    cat <<EOF > "$LOCAL_GIT_DIR/argocd/tekton-app.yaml"
-apiVersion: argoproj.io/v1alpha1
-kind: Application
+# Create required OperatorGroups
+ensure_operator_groups() {
+    log_info "Ensuring OperatorGroups exist..."
+    oc apply -f - <<EOF
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
 metadata:
-  name: tekton-app
-  namespace: $ARGO_NAMESPACE
-spec:
-  project: default
-  source:
-    repoURL: $GIT_REPO
-    path: tekton
-    targetRevision: $GIT_BRANCH
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: $TEKTON_NAMESPACE
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+  name: pipelines-operator-group
+  namespace: $TEKTON_NAMESPACE
+spec: {}
 EOF
 
-    cat <<EOF > "$LOCAL_GIT_DIR/argocd/awx-app.yaml"
-apiVersion: argoproj.io/v1alpha1
-kind: Application
+    oc apply -f - <<EOF
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
 metadata:
-  name: awx-app
-  namespace: $ARGO_NAMESPACE
-spec:
-  project: default
-  source:
-    repoURL: $GIT_REPO
-    path: awx
-    targetRevision: $GIT_BRANCH
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: $ANSIBLE_NAMESPACE
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+  name: awx-operator-group
+  namespace: $ANSIBLE_NAMESPACE
+spec: {}
 EOF
-
-    log_info "YAML files created."
+    log_info "OperatorGroups created/verified."
 }
 
-# ========== SETUP RBAC ==========
-setup_rbac() {
-    log_info "Setting up RBAC for ArgoCD..."
-    for ns in "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE"; do
-        oc create rolebinding "argocd-admin-${ns}" \
-            --clusterrole=admin \
-            --serviceaccount="$ARGO_NAMESPACE:openshift-gitops-argocd-application-controller" \
-            -n "$ns" --dry-run=client -o yaml | oc apply -f -
-    done
-    log_info "RBAC configured."
+# Restart Operator Lifecycle Manager (OLM)
+restart_olm() {
+    log_info "Restarting Operator Lifecycle Manager..."
+    oc delete pod -n openshift-operator-lifecycle-manager --all --ignore-not-found
+    log_info "OLM restarted."
 }
 
-# ========== GIT COMMIT ==========
+# Commit changes to Git (ONLY way ArgoCD should apply changes)
 commit_git() {
     log_info "Committing and pushing YAML files..."
     cd "$LOCAL_GIT_DIR"
@@ -142,7 +122,7 @@ commit_git() {
     log_info "Changes pushed."
 }
 
-# ========== SYNC ARGOCD APP ==========
+# ArgoCD sync apps (NO YAML APPLY—ONLY TRIGGERS SYNC)
 sync_argocd_app() {
     local app="$1"
     log_info "Syncing ArgoCD app: $app..."
@@ -150,24 +130,21 @@ sync_argocd_app() {
     log_info "$app synced successfully."
 }
 
-# ========== MAIN EXECUTION ==========
+# Main script execution
 check_dependencies
 verify_oc_login
 verify_argocd
 login_argocd
 ensure_argocd_git_credentials
-create_directories
-create_yaml_files
+ensure_namespaces
+ensure_operator_groups
+restart_olm
 commit_git
-
-oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
-oc create ns "$ANSIBLE_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
-
-setup_rbac
-argocd app create tekton-app --upsert -f "$LOCAL_GIT_DIR/argocd/tekton-app.yaml"
-argocd app create awx-app --upsert -f "$LOCAL_GIT_DIR/argocd/awx-app.yaml"
-
 sync_argocd_app "tekton-app"
 sync_argocd_app "awx-app"
 
 log_info "✅ Deployment complete!"
+ARGO_SERVER=$(oc get route openshift-gitops-server -n "$ARGO_NAMESPACE" -o jsonpath='{.spec.host}')
+log_info "📌 ArgoCD UI: https://$ARGO_SERVER"
+log_info "🔑 ArgoCD Admin Password: (use oc CLI)"
+log_info "  oc get secret openshift-gitops-cluster -n $ARGO_NAMESPACE -o jsonpath='{.data.admin\.password}' | base64 -d"
