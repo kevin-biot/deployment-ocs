@@ -37,11 +37,16 @@ create_namespaces() {
     log_info "All required namespaces verified."
 }
 
-# ========== VERIFY OPENSHIFT LOGIN ==========
-verify_oc_login() {
-    log_info "Verifying OpenShift login..."
-    oc whoami >/dev/null || error_exit "Not logged into OpenShift."
-    log_info "OpenShift login verified."
+# ========== REVERT RBAC TO WORKING STATE ==========
+setup_rbac() {
+    log_info "Setting up RBAC for ArgoCD service account..."
+    for ns in "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE"; do
+        oc create rolebinding "argocd-admin-${ns}" \
+            --clusterrole=admin \
+            --serviceaccount="$ARGO_NAMESPACE:openshift-gitops-argocd-application-controller" \
+            -n "$ns" --dry-run=client -o yaml | oc apply -f -
+    done
+    log_info "RBAC RoleBindings configured."
 }
 
 # ========== VERIFY ARGOCD ==========
@@ -72,55 +77,61 @@ ensure_argocd_git_credentials() {
     fi
 }
 
-# ========== FIX ARGOCD RBAC ==========
-setup_rbac() {
-    log_info "Setting up ClusterRoleBinding for ArgoCD..."
-    oc create clusterrolebinding argocd-cluster-admin \
-        --clusterrole=cluster-admin \
-        --serviceaccount=openshift-gitops:openshift-gitops-argocd-application-controller \
-        --dry-run=client -o yaml | oc apply -f -
-    log_info "ArgoCD has proper cluster-wide access."
-}
+# ========== CREATE YAML FILES (OPERATORS INCLUDED) ==========
+create_yaml_files() {
+    log_info "Creating required YAML files..."
 
-# ========== WAIT FOR OPERATOR INSTALLATION ==========
-wait_for_operators() {
-    log_info "Waiting for Tekton and AWX Operators to be ready..."
-    oc wait --for=condition=Available -n "$TEKTON_NAMESPACE" subscription tekton-operator --timeout=600s || log_error "Tekton Operator not ready."
-    oc wait --for=condition=Available -n "$ANSIBLE_NAMESPACE" subscription awx-operator --timeout=600s || log_error "AWX Operator not ready."
-    log_info "Tekton and AWX Operators are ready."
-}
-
-# ========== ADD TEKTON & AWX CUSTOM RESOURCES ==========
-add_custom_resources() {
-    log_info "Applying TektonPipeline and AWX Custom Resources..."
-
-    cat <<EOF > "$LOCAL_GIT_DIR/tekton/tekton-pipeline.yaml"
-apiVersion: operator.tekton.dev/v1alpha1
-kind: TektonPipeline
+    cat <<EOF > "$LOCAL_GIT_DIR/argocd/tekton-app.yaml"
+apiVersion: argoproj.io/v1alpha1
+kind: Application
 metadata:
-  name: pipeline
-  namespace: $TEKTON_NAMESPACE
-spec: {}
+  name: tekton-app
+  namespace: $ARGO_NAMESPACE
+spec:
+  project: default
+  source:
+    repoURL: $GIT_REPO
+    path: tekton
+    targetRevision: $GIT_BRANCH
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: $TEKTON_NAMESPACE
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
 EOF
 
-    cat <<EOF > "$LOCAL_GIT_DIR/awx/awx-instance.yaml"
-apiVersion: awx.ansible.com/v1beta1
-kind: AWX
+    cat <<EOF > "$LOCAL_GIT_DIR/argocd/awx-app.yaml"
+apiVersion: argoproj.io/v1alpha1
+kind: Application
 metadata:
-  name: awx-instance
-  namespace: $ANSIBLE_NAMESPACE
-spec: {}
+  name: awx-app
+  namespace: $ARGO_NAMESPACE
+spec:
+  project: default
+  source:
+    repoURL: $GIT_REPO
+    path: awx
+    targetRevision: $GIT_BRANCH
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: $ANSIBLE_NAMESPACE
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
 EOF
 
-    log_info "TektonPipeline and AWX Instance YAML files created."
+    log_info "YAML files created."
 }
 
-# ========== COMMIT TO GIT ==========
+# ========== GIT COMMIT ==========
 commit_git() {
     log_info "Committing and pushing YAML files..."
     cd "$LOCAL_GIT_DIR"
     git add .
-    git commit -m "Added TektonPipeline and AWX Custom Resources"
+    git commit -m "Automated deployment commit"
     git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH"
     log_info "Changes pushed."
 }
@@ -128,38 +139,26 @@ commit_git() {
 # ========== SYNC ARGOCD APP ==========
 sync_argocd_app() {
     local app="$1"
-    local attempt=1
-    while [ $attempt -le 3 ]; do
-        log_info "Syncing ArgoCD app: $app (Attempt $attempt)..."
-        if argocd app sync "$app" --force; then
-            log_info "$app synced successfully."
-            return
-        else
-            log_error "$app sync failed on attempt $attempt."
-        fi
-        sleep 10
-        attempt=$((attempt+1))
-    done
-    error_exit "$app failed to sync after 3 attempts."
+    log_info "Syncing ArgoCD app: $app..."
+    if argocd app sync "$app" --force; then
+        log_info "$app synced successfully."
+    else
+        log_error "$app sync failed."
+        error_exit "$app failed to sync."
+    fi
 }
 
 # ========== MAIN EXECUTION FLOW ==========
 check_dependencies
-verify_oc_login
 verify_argocd
 create_namespaces
 setup_rbac
 login_argocd
 ensure_argocd_git_credentials
-wait_for_operators
-add_custom_resources
+create_yaml_files
 commit_git
 
 sync_argocd_app "tekton-app"
 sync_argocd_app "awx-app"
 
 log_info "✅ Deployment complete!"
-ARGO_SERVER=$(oc get route openshift-gitops-server -n "$ARGO_NAMESPACE" -o jsonpath='{.spec.host}')
-log_info "📌 ArgoCD UI: https://$ARGO_SERVER"
-log_info "🔑 ArgoCD Admin Password: (get using oc CLI:)"
-log_info "  oc get secret openshift-gitops-cluster -n $ARGO_NAMESPACE -o jsonpath='{.data.admin\.password}' | base64 -d"
