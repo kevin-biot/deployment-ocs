@@ -53,7 +53,7 @@ clean_git_repo() {
     log_info "Cleaning Git repository state..."
     cd "$LOCAL_GIT_DIR"
     # Remove entire directories to ensure complete cleanup
-    rm -rf tekton awx argocd
+    rm -rf tekton awx argocd tekton-olm
     # Stage deletions and commit them
     git add -A
     git commit -m "Cleanup before fresh deployment" || log_info "No changes to commit."
@@ -61,7 +61,7 @@ clean_git_repo() {
     log_info "Performing deep Git cleanup..."
     git clean -fdx  # Remove ALL untracked files, including ignored ones
     # Recreate the directories so that new YAML files can be written
-    mkdir -p tekton awx argocd
+    mkdir -p tekton awx argocd tekton-olm
     # (Stray file check removed because tracked files are expected)
 }
 
@@ -161,7 +161,7 @@ ensure_argocd_git_credentials() {
 # ========== CREATE DIRECTORIES ==========
 create_directories() {
     log_info "Creating required directories..."
-    mkdir -p "$LOCAL_GIT_DIR"/{argocd,tekton,awx,logs}
+    mkdir -p "$LOCAL_GIT_DIR"/{argocd,tekton,awx,logs,tekton-olm}
     log_info "Directories created."
 }
 
@@ -190,7 +190,7 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-    - ApplyOutOfSyncOnly=true
+      - ApplyOutOfSyncOnly=true
 EOF
 
     cat <<EOF > "$LOCAL_GIT_DIR/argocd/awx-app.yaml"
@@ -213,7 +213,7 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
-    - ApplyOutOfSyncOnly=true
+      - ApplyOutOfSyncOnly=true
 EOF
 
     # Tekton: TektonPipeline Custom Resource
@@ -227,7 +227,7 @@ spec:
   targetNamespace: $TEKTON_NAMESPACE
 EOF
 
-    # AWX: Operator Manifest
+    # AWX: Operator Manifest (unchanged)
     cat <<EOF > "$LOCAL_GIT_DIR/awx/awx-operator.yaml"
 apiVersion: v1
 kind: Namespace
@@ -297,6 +297,38 @@ spec:
 EOF
 
     log_info "YAML files created."
+}
+
+# ========== CREATE TEKTON OPERATOR OLM MANIFESTS ==========
+create_tekton_operator_manifests() {
+    log_info "Creating Tekton Operator OLM manifests..."
+    # OperatorGroup manifest
+    cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: pipelines-operator-group
+  namespace: $TEKTON_NAMESPACE
+spec:
+  targetNamespaces:
+    - $TEKTON_NAMESPACE
+EOF
+
+    # Subscription manifest for Red Hat OpenShift Pipelines Operator
+    cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: openshift-pipelines-operator
+  namespace: $TEKTON_NAMESPACE
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: openshift-pipelines-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+EOF
+    log_info "Tekton Operator OLM manifests created."
 }
 
 # ========== SETUP RBAC ROLEBINDING ==========
@@ -406,12 +438,14 @@ login_argocd
 ensure_argocd_git_credentials
 create_directories
 create_yaml_files
+create_tekton_operator_manifests
 commit_git
 
 oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
 oc create ns "$ANSIBLE_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
-# Remove creation of "tekton-operator" namespace since we expect the OLM-installed operator to handle Tekton pipelines.
-oc create ns "awx-operator" --dry-run=client -o yaml | oc apply -f -
+# OLM resources for Tekton will be applied to the TEKTON_NAMESPACE
+oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
+oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
 
 setup_rbac  # RBAC before app creation
 
