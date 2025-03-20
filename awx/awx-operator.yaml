@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: awx-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: awx-operator-clusterrolebinding
+subjects:
+- kind: ServiceAccount
+  name: awx-operator
+  namespace: awx-operator
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: awx-operator
+  namespace: awx-operator
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: awx-operator
+  namespace: awx-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: awx-operator
+  template:
+    metadata:
+      labels:
+        name: awx-operator
+    spec:
+      serviceAccountName: awx-operator
+      containers:
+      - name: awx-operator
+        image: quay.io/ansible/awx-operator:2.14.0
+        env:
+        - name: WATCH_NAMESPACE
+          value: "awx"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
