@@ -62,7 +62,7 @@ clean_git_repo() {
     git clean -fdx  # Remove ALL untracked files, including ignored ones
     # Recreate the directories so that new YAML files can be written
     mkdir -p tekton awx argocd
-    # (Stray file check removed to avoid false positives on tracked files)
+    # (Stray file check removed because tracked files are expected)
 }
 
 # ========== CLEANUP OLD RESOURCES ==========
@@ -216,64 +216,6 @@ spec:
     - ApplyOutOfSyncOnly=true
 EOF
 
-    # Tekton: Operator Manifest (Updated image tag to use 'latest')
-    cat <<EOF > "$LOCAL_GIT_DIR/tekton/tekton-operator.yaml"
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: tekton-operator
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: tekton-operator-clusterrolebinding
-subjects:
-- kind: ServiceAccount
-  name: tekton-operator
-  namespace: tekton-operator
-roleRef:
-  kind: ClusterRole
-  name: cluster-admin
-  apiGroup: rbac.authorization.k8s.io
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: tekton-operator
-  namespace: tekton-operator
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: tekton-operator
-  namespace: tekton-operator
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      name: tekton-operator
-  template:
-    metadata:
-      labels:
-        name: tekton-operator
-    spec:
-      serviceAccountName: tekton-operator
-      containers:
-      - name: tekton-operator
-        image: gcr.io/tekton-releases/tekton-operator:latest
-        env:
-        - name: WATCH_NAMESPACE
-          value: "$TEKTON_NAMESPACE"
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        resources:
-          requests:
-            cpu: 100m
-            memory: 256Mi
-EOF
-
     # Tekton: TektonPipeline Custom Resource
     cat <<EOF > "$LOCAL_GIT_DIR/tekton/tekton-pipeline.yaml"
 apiVersion: operator.tekton.dev/v1alpha1
@@ -362,7 +304,7 @@ setup_rbac() {
     log_info "Setting up RBAC for ArgoCD service account..."
     oc adm policy add-cluster-role-to-user cluster-admin -z openshift-gitops-argocd-application-controller -n "$ARGO_NAMESPACE" 2>/dev/null || true
 
-    for ns in "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE" "tekton-operator" "awx-operator"; do
+    for ns in "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE" "awx-operator"; do
         oc create rolebinding "argocd-admin-${ns}" \
             --clusterrole=admin \
             --serviceaccount="$ARGO_NAMESPACE:openshift-gitops-argocd-application-controller" \
@@ -468,7 +410,7 @@ commit_git
 
 oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
 oc create ns "$ANSIBLE_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
-oc create ns "tekton-operator" --dry-run=client -o yaml | oc apply -f -
+# Remove creation of "tekton-operator" namespace since we expect the OLM-installed operator to handle Tekton pipelines.
 oc create ns "awx-operator" --dry-run=client -o yaml | oc apply -f -
 
 setup_rbac  # RBAC before app creation
