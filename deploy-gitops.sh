@@ -203,7 +203,7 @@ spec:
       - ApplyOutOfSyncOnly=true
 EOF
 
-    # ArgoCD Application for Tekton Pipeline
+    # ArgoCD Application for Tekton Pipeline CR
     cat <<EOF > "$LOCAL_GIT_DIR/argocd/tekton-app.yaml"
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -259,7 +259,8 @@ metadata:
   name: pipelines-operator-group
   namespace: $TEKTON_OPERATOR_NAMESPACE
 spec:
-  upgradeStrategy: Default
+  targetNamespaces:
+    - $TEKTON_NAMESPACE
 EOF
 
     # Tekton OLM: Subscription
@@ -267,12 +268,12 @@ EOF
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
-  name: openshift-pipelines-operator
+  name: openshift-pipelines
   namespace: $TEKTON_OPERATOR_NAMESPACE
 spec:
   channel: stable
   installPlanApproval: Automatic
-  name: openshift-pipelines-operator-rh
+  name: openshift-pipelines
   source: redhat-operators
   sourceNamespace: openshift-marketplace
 EOF
@@ -288,7 +289,7 @@ spec:
   targetNamespace: $TEKTON_NAMESPACE
 EOF
 
-    # AWX: Operator Manifest
+    # AWX: Operator Manifest (unchanged)
     cat <<EOF > "$LOCAL_GIT_DIR/awx/awx-operator.yaml"
 apiVersion: v1
 kind: Namespace
@@ -467,6 +468,7 @@ login_argocd
 ensure_argocd_git_credentials
 create_directories
 create_yaml_files
+create_tekton_operator_manifests
 commit_git
 
 # Ensure required namespaces exist
@@ -474,6 +476,7 @@ ensure_namespace "$TEKTON_NAMESPACE"
 ensure_namespace "$ANSIBLE_NAMESPACE"
 ensure_namespace "awx-operator"
 ensure_namespace "$TEKTON_OPERATOR_NAMESPACE"
+ensure_namespace "openshift-operators"
 
 setup_rbac
 
@@ -483,7 +486,7 @@ argocd app create awx-app --upsert -f "$LOCAL_GIT_DIR/argocd/awx-app.yaml"
 
 verify_clean_slate
 
-wait_for_argocd_sync "tekton-operator-app"  # Sync operator first
+wait_for_argocd_sync "tekton-operator-app"
 wait_for_argocd_sync "tekton-app"
 wait_for_argocd_sync "awx-app"
 
