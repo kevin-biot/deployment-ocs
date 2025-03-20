@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: awx-app
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kevin-biot/deployment-ocs.git
+    path: awx
+    targetRevision: main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: awx
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
