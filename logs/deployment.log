@@ -534,3 +534,25 @@
 \e[32m[INFO] Creating required YAML files...\e[0m
 \e[32m[INFO] YAML files created.\e[0m
 \e[32m[INFO] Committing and pushing YAML files...\e[0m
+\e[32m[INFO] Cleaning up old resources...\e[0m
+\e[32m[INFO] Deleting custom CatalogSources in openshift-marketplace...\e[0m
+\e[32m[INFO] Cleaning up subscriptions, operatorgroups, and custom resources...\e[0m
+\e[32m[INFO] Deleting operator and app pods...\e[0m
+\e[32m[INFO] Pruning ArgoCD applications...\e[0m
+\e[32m[INFO] Resource cleanup complete.\e[0m
+\e[32m[INFO] Verifying clean slate...\e[0m
+\e[32m[INFO] Only expected system pods found in openshift-marketplace:\e[0m
+\e[32m[INFO] Clean slate verified.\e[0m
+\e[32m[INFO] Verifying OpenShift login...\e[0m
+\e[32m[INFO] OpenShift login verified.\e[0m
+\e[32m[INFO] Verifying ArgoCD...\e[0m
+\e[32m[INFO] ArgoCD verified.\e[0m
+\e[32m[INFO] Logging into ArgoCD CLI...\e[0m
+\e[32m[INFO] Logged into ArgoCD CLI.\e[0m
+\e[32m[INFO] Ensuring ArgoCD has Git credentials...\e[0m
+\e[32m[INFO] ArgoCD Git credentials already configured.\e[0m
+\e[32m[INFO] Creating required directories...\e[0m
+\e[32m[INFO] Directories created.\e[0m
+\e[32m[INFO] Creating required YAML files...\e[0m
+\e[32m[INFO] YAML files created.\e[0m
+\e[32m[INFO] Committing and pushing YAML files...\e[0m
