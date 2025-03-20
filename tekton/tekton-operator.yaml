@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tekton-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: tekton-operator-clusterrolebinding
+subjects:
+- kind: ServiceAccount
+  name: tekton-operator
+  namespace: tekton-operator
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tekton-operator
+  namespace: tekton-operator
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tekton-operator
+  namespace: tekton-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: tekton-operator
+  template:
+    metadata:
+      labels:
+        name: tekton-operator
+    spec:
+      serviceAccountName: tekton-operator
+      containers:
+      - name: tekton-operator
+        image: gcr.io/tekton-releases/tekton-operator:v0.75.0
+        env:
+        - name: WATCH_NAMESPACE
+          value: "openshift-pipelines"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi

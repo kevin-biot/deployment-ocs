@@ -1,0 +1,11 @@
+apiVersion: awx.ansible.com/v1beta1
+kind: AWX
+metadata:
+  name: awx
+  namespace: awx
+spec:
+  service_type: ClusterIP
+  ingress_type: none
+  hostname: awx.example.com
+  image: quay.io/ansible/awx:24.0.0
+  image_pull_policy: IfNotPresent
