@@ -73,7 +73,6 @@ clean_git_repo() {
     git clean -fdx  # Remove ALL untracked files, including ignored ones
     # Recreate the directories so that new YAML files can be written
     mkdir -p tekton awx argocd tekton-olm
-    # (Stray file check removed because tracked files are expected)
 }
 
 # ========== CLEANUP OLD RESOURCES ==========
@@ -313,25 +312,25 @@ EOF
 # ========== CREATE TEKTON OPERATOR OLM MANIFESTS ==========
 create_tekton_operator_manifests() {
     log_info "Creating Tekton Operator OLM manifests..."
-    # OperatorGroup manifest
+    # Create the OperatorGroup manifest in the openshift-operators namespace.
     cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
   name: pipelines-operator-group
-  namespace: $TEKTON_NAMESPACE
+  namespace: openshift-operators
 spec:
   targetNamespaces:
     - $TEKTON_NAMESPACE
 EOF
 
-    # Subscription manifest for the OpenShift Pipelines Operator
+    # Create the Subscription manifest in the openshift-operators namespace.
     cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: openshift-pipelines
-  namespace: $TEKTON_NAMESPACE
+  namespace: openshift-operators
 spec:
   channel: stable
   installPlanApproval: Automatic
@@ -440,7 +439,7 @@ wait_for_pods() {
 
 # ========== MAIN EXECUTION FLOW ==========
 check_dependencies
-delete_argocd_apps  # Delete apps first to stop sync
+delete_argocd_apps        # Delete apps first to stop sync
 clean_git_repo
 cleanup_old_resources
 verify_oc_login
@@ -456,14 +455,15 @@ commit_git
 ensure_namespace "$TEKTON_NAMESPACE"
 ensure_namespace "$ANSIBLE_NAMESPACE"
 ensure_namespace "awx-operator"
+ensure_namespace "openshift-operators"
 
 # Apply namespaces (they should already exist now)
 oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
 oc create ns "$ANSIBLE_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
 
-# Apply the Tekton OLM manifests to the TEKTON_NAMESPACE
-oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
-oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
+# Apply the Tekton OLM manifests to the openshift-operators namespace
+oc create ns "openshift-operators" --dry-run=client -o yaml | oc apply -f "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
+oc create ns "openshift-operators" --dry-run=client -o yaml | oc apply -f "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
 
 setup_rbac  # RBAC before app creation
 
