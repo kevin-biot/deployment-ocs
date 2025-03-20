@@ -29,6 +29,17 @@ check_dependencies() {
     log_info "Dependencies verified."
 }
 
+# ========== ENSURE NAMESPACE EXISTS ==========
+ensure_namespace() {
+    local ns="$1"
+    if ! oc get namespace "$ns" >/dev/null 2>&1; then
+        log_info "Namespace '$ns' not found; creating it..."
+        oc create namespace "$ns"
+    else
+        log_info "Namespace '$ns' exists."
+    fi
+}
+
 # ========== DELETE ARGOCD APPS ==========
 delete_argocd_apps() {
     log_info "Deleting existing ArgoCD applications to prevent sync interference..."
@@ -441,9 +452,16 @@ create_yaml_files
 create_tekton_operator_manifests
 commit_git
 
+# Ensure required namespaces exist
+ensure_namespace "$TEKTON_NAMESPACE"
+ensure_namespace "$ANSIBLE_NAMESPACE"
+ensure_namespace "awx-operator"
+
+# Apply namespaces (they should already exist now)
 oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
 oc create ns "$ANSIBLE_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
-# OLM resources for Tekton will be applied to the TEKTON_NAMESPACE
+
+# Apply the Tekton OLM manifests to the TEKTON_NAMESPACE
 oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
 oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
 
