@@ -325,17 +325,17 @@ spec:
     - $TEKTON_NAMESPACE
 EOF
 
-    # Subscription manifest for Red Hat OpenShift Pipelines Operator
+    # Subscription manifest for the OpenShift Pipelines Operator
     cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
-  name: openshift-pipelines-operator
+  name: openshift-pipelines
   namespace: $TEKTON_NAMESPACE
 spec:
   channel: stable
   installPlanApproval: Automatic
-  name: openshift-pipelines-operator
+  name: openshift-pipelines
   source: redhat-operators
   sourceNamespace: openshift-marketplace
 EOF
