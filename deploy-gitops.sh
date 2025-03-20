@@ -62,7 +62,7 @@ clean_git_repo() {
     git clean -fdx  # Remove ALL untracked files, including ignored ones
     # Recreate the directories so that new YAML files can be written
     mkdir -p tekton awx argocd
-    # [Removed stray file check to avoid false positives on tracked files]
+    # (Stray file check removed to avoid false positives on tracked files)
 }
 
 # ========== CLEANUP OLD RESOURCES ==========
@@ -216,7 +216,7 @@ spec:
     - ApplyOutOfSyncOnly=true
 EOF
 
-    # Tekton: Operator Manifest (Updated image tag to v0.70.0)
+    # Tekton: Operator Manifest (Updated image tag to use 'latest')
     cat <<EOF > "$LOCAL_GIT_DIR/tekton/tekton-operator.yaml"
 apiVersion: v1
 kind: Namespace
@@ -260,7 +260,7 @@ spec:
       serviceAccountName: tekton-operator
       containers:
       - name: tekton-operator
-        image: gcr.io/tekton-releases/tekton-operator:v0.70.0
+        image: gcr.io/tekton-releases/tekton-operator:latest
         env:
         - name: WATCH_NAMESPACE
           value: "$TEKTON_NAMESPACE"
