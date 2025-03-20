@@ -40,7 +40,7 @@ spec:
       serviceAccountName: tekton-operator
       containers:
       - name: tekton-operator
-        image: gcr.io/tekton-releases/operator:v0.71.0
+        image: gcr.io/tekton-releases/tekton-operator:v0.70.0
         env:
         - name: WATCH_NAMESPACE
           value: "openshift-pipelines"
