@@ -45,7 +45,7 @@ delete_argocd_apps() {
     log_info "Deleting existing ArgoCD applications to prevent sync interference..."
     argocd app delete tekton-app --yes 2>/dev/null || true
     argocd app delete awx-app --yes 2>/dev/null || true
-    sleep 5  # Give ArgoCD a moment to process deletions
+    sleep 5
     log_info "Verifying that ArgoCD apps are fully deleted..."
     for app in tekton-app awx-app; do
         local app_status
@@ -65,20 +65,17 @@ clean_git_repo() {
     cd "$LOCAL_GIT_DIR"
     # Remove entire directories to ensure complete cleanup
     rm -rf tekton awx argocd tekton-olm
-    # Stage deletions and commit them
     git add -A
     git commit -m "Cleanup before fresh deployment" || log_info "No changes to commit."
     git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH"
     log_info "Performing deep Git cleanup..."
-    git clean -fdx  # Remove ALL untracked files, including ignored ones
-    # Recreate the directories so that new YAML files can be written
+    git clean -fdx
     mkdir -p tekton awx argocd tekton-olm
 }
 
 # ========== CLEANUP OLD RESOURCES ==========
 cleanup_old_resources() {
     log_info "Cleaning up old resources..."
-
     log_info "Deleting custom CatalogSources in openshift-marketplace..."
     for catalog in "awx-catalog" "tekton-catalog" "community-catalog" "tektoncd-catalog"; do
         if oc get catalogsource "$catalog" -n openshift-marketplace &>/dev/null; then
@@ -400,8 +397,10 @@ wait_for_argocd_sync() {
     argocd app sync "$app" --prune
     while [ $attempt -le 15 ]; do
         log_info "Waiting for $app to sync (Attempt $attempt)..."
-        local status=$(argocd app get "$app" --output json | jq -r '.status.sync.status')
-        local health=$(argocd app get "$app" --output json | jq -r '.status.health.status')
+        local status
+        local health
+        status=$(argocd app get "$app" --output json | jq -r '.status.sync.status')
+        health=$(argocd app get "$app" --output json | jq -r '.status.health.status')
         if [[ "$status" == "Synced" && "$health" == "Healthy" ]]; then
             log_info "$app synced and healthy."
             return
@@ -409,7 +408,8 @@ wait_for_argocd_sync() {
             log_info "$app synced but health is $health. Checking pods..."
             oc get pods -n "${app//-app/}-operator" -o wide
             oc get pods -n "${app//-app/}" -o wide
-            local operator_pod_status=$(oc get pods -n "${app//-app/}-operator" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "NoPod")
+            local operator_pod_status
+            operator_pod_status=$(oc get pods -n "${app//-app/}-operator" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "NoPod")
             if [[ "$operator_pod_status" != "Running" ]]; then
                 log_error "Operator pod in ${app//-app/}-operator is not running: $operator_pod_status"
                 oc describe pod -n "${app//-app/}-operator" -l name="${app//-app/}-operator"
