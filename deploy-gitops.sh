@@ -6,7 +6,8 @@ set -euo pipefail
 GIT_REPO="https://github.com/kevin-biot/deployment-ocs.git"
 GIT_BRANCH="main"
 ARGO_NAMESPACE="openshift-gitops"
-TEKTON_NAMESPACE="openshift-pipelines"
+TEKTON_OPERATOR_NAMESPACE="openshift-operators"  # Operator install namespace
+TEKTON_NAMESPACE="openshift-pipelines"          # Pipeline runtime namespace
 ANSIBLE_NAMESPACE="awx"
 LOCAL_GIT_DIR=~/deployment-ocs
 LOG_DIR="$LOCAL_GIT_DIR/logs"
@@ -44,10 +45,11 @@ ensure_namespace() {
 delete_argocd_apps() {
     log_info "Deleting existing ArgoCD applications to prevent sync interference..."
     argocd app delete tekton-app --yes 2>/dev/null || true
+    argocd app delete tekton-operator-app --yes 2>/dev/null || true
     argocd app delete awx-app --yes 2>/dev/null || true
     sleep 5
     log_info "Verifying that ArgoCD apps are fully deleted..."
-    for app in tekton-app awx-app; do
+    for app in tekton-app tekton-operator-app awx-app; do
         local app_status
         app_status=$(argocd app get "$app" --output json 2>/dev/null | jq -r '.metadata.name' || echo "not found")
         if [[ "$app_status" != "not found" ]]; then
@@ -63,12 +65,10 @@ delete_argocd_apps() {
 clean_git_repo() {
     log_info "Cleaning Git repository state..."
     cd "$LOCAL_GIT_DIR"
-    # Remove entire directories to ensure complete cleanup
     rm -rf tekton awx argocd tekton-olm
     git add -A
     git commit -m "Cleanup before fresh deployment" || log_info "No changes to commit."
     git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH"
-    log_info "Performing deep Git cleanup..."
     git clean -fdx
     mkdir -p tekton awx argocd tekton-olm
 }
@@ -86,10 +86,12 @@ cleanup_old_resources() {
     done
 
     log_info "Cleaning up subscriptions, operatorgroups, and custom resources..."
+    oc delete subscription --all -n "$TEKTON_OPERATOR_NAMESPACE" --force --grace-period=0 2>/dev/null || true
     oc delete subscription --all -n "$TEKTON_NAMESPACE" --force --grace-period=0 2>/dev/null || true
     oc delete subscription --all -n "$ANSIBLE_NAMESPACE" --force --grace-period=0 2>/dev/null || true
     oc delete tektonpipeline --all -n "$TEKTON_NAMESPACE" 2>/dev/null || true
     oc delete awx --all -n "$ANSIBLE_NAMESPACE" 2>/dev/null || true
+    oc delete operatorgroup --all -n "$TEKTON_OPERATOR_NAMESPACE" 2>/dev/null || true
     oc delete operatorgroup --all -n "$TEKTON_NAMESPACE" 2>/dev/null || true
     oc delete operatorgroup --all -n "$ANSIBLE_NAMESPACE" 2>/dev/null || true
 
@@ -98,6 +100,7 @@ cleanup_old_resources() {
     oc delete pod -n awx-operator --all --force --grace-period=0 2>/dev/null || true
     oc delete pod -n "$TEKTON_NAMESPACE" --all --force --grace-period=0 2>/dev/null || true
     oc delete pod -n "$ANSIBLE_NAMESPACE" --all --force --grace-period=0 2>/dev/null || true
+    oc delete pod -n "$TEKTON_OPERATOR_NAMESPACE" --all --force --grace-period=0 2>/dev/null || true
 
     log_info "Resource cleanup complete."
 }
@@ -105,7 +108,7 @@ cleanup_old_resources() {
 # ========== VERIFY CLEAN SLATE ==========
 verify_clean_slate() {
     log_info "Verifying clean slate..."
-    for ns in "openshift-marketplace" "tekton-operator" "awx-operator" "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE"; do
+    for ns in "openshift-marketplace" "tekton-operator" "awx-operator" "$TEKTON_NAMESPACE" "$TEKTON_OPERATOR_NAMESPACE"; do
         local pod_count
         pod_count=$(oc get pods -n "$ns" --no-headers 2>/dev/null | wc -l)
         if [ "$pod_count" -gt 0 ]; then
@@ -168,7 +171,7 @@ ensure_argocd_git_credentials() {
 # ========== CREATE DIRECTORIES ==========
 create_directories() {
     log_info "Creating required directories..."
-    mkdir -p "$LOCAL_GIT_DIR"/{argocd,tekton,awx,logs,tekton-olm}
+    mkdir -p "$LOCAL_GIT_DIR"/{argocd,tekton,awx,tekton-olm,logs}
     log_info "Directories created."
 }
 
@@ -176,7 +179,31 @@ create_directories() {
 create_yaml_files() {
     log_info "Creating required YAML files..."
 
-    # ArgoCD Applications (disable auto-sync initially)
+    # ArgoCD Application for Tekton Operator (OLM)
+    cat <<EOF > "$LOCAL_GIT_DIR/argocd/tekton-operator-app.yaml"
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tekton-operator-app
+  namespace: $ARGO_NAMESPACE
+spec:
+  project: default
+  source:
+    repoURL: $GIT_REPO
+    path: tekton-olm
+    targetRevision: $GIT_BRANCH
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: $TEKTON_OPERATOR_NAMESPACE
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
+EOF
+
+    # ArgoCD Application for Tekton Pipeline
     cat <<EOF > "$LOCAL_GIT_DIR/argocd/tekton-app.yaml"
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -200,6 +227,7 @@ spec:
       - ApplyOutOfSyncOnly=true
 EOF
 
+    # ArgoCD Application for AWX
     cat <<EOF > "$LOCAL_GIT_DIR/argocd/awx-app.yaml"
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -223,6 +251,32 @@ spec:
       - ApplyOutOfSyncOnly=true
 EOF
 
+    # Tekton OLM: OperatorGroup
+    cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: pipelines-operator-group
+  namespace: $TEKTON_OPERATOR_NAMESPACE
+spec:
+  upgradeStrategy: Default
+EOF
+
+    # Tekton OLM: Subscription
+    cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: openshift-pipelines-operator
+  namespace: $TEKTON_OPERATOR_NAMESPACE
+spec:
+  channel: stable
+  installPlanApproval: Automatic
+  name: openshift-pipelines-operator-rh
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+EOF
+
     # Tekton: TektonPipeline Custom Resource
     cat <<EOF > "$LOCAL_GIT_DIR/tekton/tekton-pipeline.yaml"
 apiVersion: operator.tekton.dev/v1alpha1
@@ -234,7 +288,7 @@ spec:
   targetNamespace: $TEKTON_NAMESPACE
 EOF
 
-    # AWX: Operator Manifest (unchanged)
+    # AWX: Operator Manifest
     cat <<EOF > "$LOCAL_GIT_DIR/awx/awx-operator.yaml"
 apiVersion: v1
 kind: Namespace
@@ -306,44 +360,12 @@ EOF
     log_info "YAML files created."
 }
 
-# ========== CREATE TEKTON OPERATOR OLM MANIFESTS ==========
-create_tekton_operator_manifests() {
-    log_info "Creating Tekton Operator OLM manifests..."
-    # Create the OperatorGroup manifest in the openshift-operators namespace.
-    cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: pipelines-operator-group
-  namespace: openshift-operators
-spec:
-  targetNamespaces:
-    - $TEKTON_NAMESPACE
-EOF
-
-    # Create the Subscription manifest in the openshift-operators namespace.
-    cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: openshift-pipelines
-  namespace: openshift-operators
-spec:
-  channel: stable
-  installPlanApproval: Automatic
-  name: openshift-pipelines
-  source: redhat-operators
-  sourceNamespace: openshift-marketplace
-EOF
-    log_info "Tekton Operator OLM manifests created."
-}
-
 # ========== SETUP RBAC ROLEBINDING ==========
 setup_rbac() {
     log_info "Setting up RBAC for ArgoCD service account..."
     oc adm policy add-cluster-role-to-user cluster-admin -z openshift-gitops-argocd-application-controller -n "$ARGO_NAMESPACE" 2>/dev/null || true
 
-    for ns in "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE" "awx-operator"; do
+    for ns in "$TEKTON_NAMESPACE" "$ANSIBLE_NAMESPACE" "$TEKTON_OPERATOR_NAMESPACE" "awx-operator"; do
         oc create rolebinding "argocd-admin-${ns}" \
             --clusterrole=admin \
             --serviceaccount="$ARGO_NAMESPACE:openshift-gitops-argocd-application-controller" \
@@ -358,6 +380,9 @@ metadata:
 rules:
 - apiGroups: ["operator.tekton.dev"]
   resources: ["tektonpipelines", "tektontriggers", "tektonconfigs"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["operators.coreos.com"]
+  resources: ["subscriptions", "operatorgroups"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -382,7 +407,7 @@ commit_git() {
     log_info "Committing and pushing YAML files..."
     cd "$LOCAL_GIT_DIR"
     git add .
-    git commit -m "Deploy Tekton and AWX with full cleanup and controlled ArgoCD sync" || log_info "No changes to commit."
+    git commit -m "Deploy AWX via manifests and Tekton via Red Hat OpenShift Pipelines Operator" || log_info "No changes to commit."
     git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH" --force
     log_info "Changes pushed."
 }
@@ -399,26 +424,20 @@ wait_for_argocd_sync() {
         log_info "Waiting for $app to sync (Attempt $attempt)..."
         local status
         local health
-        status=$(argocd app get "$app" --output json | jq -r '.status.sync.status')
-        health=$(argocd app get "$app" --output json | jq -r '.status.health.status')
+        status=$(argocd app get "$app" --output json | jq -r '.status.sync.status' 2>/dev/null || echo "Unknown")
+        health=$(argocd app get "$app" --output json | jq -r '.status.health.status' 2>/dev/null || echo "Unknown")
         if [[ "$status" == "Synced" && "$health" == "Healthy" ]]; then
             log_info "$app synced and healthy."
             return
         elif [[ "$status" == "Synced" ]]; then
             log_info "$app synced but health is $health. Checking pods..."
-            oc get pods -n "${app//-app/}-operator" -o wide
-            oc get pods -n "${app//-app/}" -o wide
-            local operator_pod_status
-            operator_pod_status=$(oc get pods -n "${app//-app/}-operator" -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "NoPod")
-            if [[ "$operator_pod_status" != "Running" ]]; then
-                log_error "Operator pod in ${app//-app/}-operator is not running: $operator_pod_status"
-                oc describe pod -n "${app//-app/}-operator" -l name="${app//-app/}-operator"
-                error_exit "Deployment failed due to unhealthy operator pod."
-            fi
-            log_info "Pod events for ${app//-app/}-operator:"
-            oc get events -n "${app//-app/}-operator" --sort-by='.lastTimestamp'
-            log_info "Pod events for ${app//-app/}:"
-            oc get events -n "${app//-app/}" --sort-by='.lastTimestamp'
+            oc get pods -n "$TEKTON_NAMESPACE" -o wide 2>/dev/null || true
+            oc get pods -n "$ANSIBLE_NAMESPACE" -o wide 2>/dev/null || true
+            oc get pods -n "$TEKTON_OPERATOR_NAMESPACE" -o wide 2>/dev/null || true
+            log_info "Events in $TEKTON_NAMESPACE:"
+            oc get events -n "$TEKTON_NAMESPACE" --sort-by='.lastTimestamp' 2>/dev/null || true
+            log_info "Events in $TEKTON_OPERATOR_NAMESPACE:"
+            oc get events -n "$TEKTON_OPERATOR_NAMESPACE" --sort-by='.lastTimestamp' 2>/dev/null || true
             sleep 30
         else
             log_info "$app status: $status, health: $health. Waiting..."
@@ -439,7 +458,7 @@ wait_for_pods() {
 
 # ========== MAIN EXECUTION FLOW ==========
 check_dependencies
-delete_argocd_apps        # Delete apps first to stop sync
+delete_argocd_apps
 clean_git_repo
 cleanup_old_resources
 verify_oc_login
@@ -448,30 +467,23 @@ login_argocd
 ensure_argocd_git_credentials
 create_directories
 create_yaml_files
-create_tekton_operator_manifests
 commit_git
 
 # Ensure required namespaces exist
 ensure_namespace "$TEKTON_NAMESPACE"
 ensure_namespace "$ANSIBLE_NAMESPACE"
 ensure_namespace "awx-operator"
-ensure_namespace "openshift-operators"
+ensure_namespace "$TEKTON_OPERATOR_NAMESPACE"
 
-# Apply namespaces (they should already exist now)
-oc create ns "$TEKTON_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
-oc create ns "$ANSIBLE_NAMESPACE" --dry-run=client -o yaml | oc apply -f -
+setup_rbac
 
-# Apply the Tekton OLM manifests to the openshift-operators namespace
-oc create ns "openshift-operators" --dry-run=client -o yaml | oc apply -f "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
-oc create ns "openshift-operators" --dry-run=client -o yaml | oc apply -f "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
-
-setup_rbac  # RBAC before app creation
-
+argocd app create tekton-operator-app --upsert -f "$LOCAL_GIT_DIR/argocd/tekton-operator-app.yaml"
 argocd app create tekton-app --upsert -f "$LOCAL_GIT_DIR/argocd/tekton-app.yaml"
 argocd app create awx-app --upsert -f "$LOCAL_GIT_DIR/argocd/awx-app.yaml"
 
 verify_clean_slate
 
+wait_for_argocd_sync "tekton-operator-app"  # Sync operator first
 wait_for_argocd_sync "tekton-app"
 wait_for_argocd_sync "awx-app"
 
