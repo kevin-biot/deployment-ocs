@@ -35,7 +35,6 @@ delete_argocd_apps() {
     argocd app delete tekton-app --yes 2>/dev/null || true
     argocd app delete awx-app --yes 2>/dev/null || true
     sleep 5  # Give ArgoCD a moment to process deletions
-
     log_info "Verifying that ArgoCD apps are fully deleted..."
     for app in tekton-app awx-app; do
         local app_status
@@ -55,15 +54,14 @@ clean_git_repo() {
     cd "$LOCAL_GIT_DIR"
     # Remove entire directories to ensure complete cleanup
     rm -rf tekton awx argocd
-    # Stage deletions and commit them
+    # Stage and commit deletions before deep clean
     git add -A
     git commit -m "Cleanup before fresh deployment" || log_info "No changes to commit."
     git push "https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/kevin-biot/deployment-ocs.git" "$GIT_BRANCH"
-    # Deep clean: remove all untracked files, including ignored ones
-    git clean -fdx
-    # Recreate the directories
+    log_info "Performing deep Git cleanup..."
+    git clean -fdx  # Remove ALL untracked files, even those ignored
+    # Recreate the directories so that new YAML files can be written
     mkdir -p tekton awx argocd
-
     # Verify no stray files remain
     if ls tekton/* awx/* argocd/* >/dev/null 2>&1; then
         log_error "Stray files found after cleanup:"
@@ -223,7 +221,7 @@ spec:
     - ApplyOutOfSyncOnly=true
 EOF
 
-    # Tekton: Operator Manifest
+    # Tekton: Operator Manifest (Updated Image Tag to v0.75.0)
     cat <<EOF > "$LOCAL_GIT_DIR/tekton/tekton-operator.yaml"
 apiVersion: v1
 kind: Namespace
@@ -267,7 +265,7 @@ spec:
       serviceAccountName: tekton-operator
       containers:
       - name: tekton-operator
-        image: gcr.io/tekton-releases/tekton-operator:v0.70.0
+        image: gcr.io/tekton-releases/tekton-operator:v0.75.0
         env:
         - name: WATCH_NAMESPACE
           value: "$TEKTON_NAMESPACE"
