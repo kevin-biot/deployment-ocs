@@ -578,3 +578,11 @@
 \e[32m[INFO] Creating required YAML files...\e[0m
 \e[32m[INFO] YAML files created.\e[0m
 \e[32m[INFO] Committing and pushing YAML files...\e[0m
+\e[31m[ERROR] Stray files found after cleanup:\e[0m
+\e[31m[ERROR] Git repo cleanup failed.\e[0m
+\e[32m[INFO] Checking dependencies...\e[0m
+\e[32m[INFO] Dependencies verified.\e[0m
+\e[32m[INFO] Deleting existing ArgoCD applications to prevent sync interference...\e[0m
+\e[32m[INFO] Verifying that ArgoCD apps are fully deleted...\e[0m
+\e[32m[INFO] ArgoCD applications removed successfully.\e[0m
+\e[32m[INFO] Cleaning Git repository state...\e[0m
