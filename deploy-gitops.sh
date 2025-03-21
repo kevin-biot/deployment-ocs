@@ -22,6 +22,7 @@ GIT_TOKEN="${GIT_TOKEN:-}"
 # Variables per Red Hat documentation:
 TEKTON_OPERATOR_PACKAGE="openshift-pipelines-operator-rh"
 TEKTON_OPERATOR_CHANNEL="pipelines-1.18"
+TEKTON_OPERATOR_STARTINGCSV="openshift-pipelines-operator-rh.v1.18.0"
 
 # ========== UTILITIES ==========
 log_info() {
@@ -286,8 +287,10 @@ spec:
       - ApplyOutOfSyncOnly=true
 EOF
 
-    # Tekton OLM: OperatorGroup
-    cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
+    # Tekton OLM: OperatorGroup manifest
+    # NOTE: Only create an OperatorGroup if the target namespace is NOT "openshift-operators"
+    if [ "$TEKTON_OPERATOR_NAMESPACE" != "openshift-operators" ]; then
+        cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
 apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
@@ -297,8 +300,12 @@ spec:
   targetNamespaces:
     - $TEKTON_NAMESPACE
 EOF
+        log_info "Tekton OperatorGroup manifest created."
+    else
+        log_info "Skipping OperatorGroup creation in $TEKTON_OPERATOR_NAMESPACE as it already exists."
+    fi
 
-    # Tekton OLM: Subscription
+    # Tekton OLM: Subscription manifest
     cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
@@ -311,6 +318,7 @@ spec:
   name: ${TEKTON_OPERATOR_PACKAGE}
   source: redhat-operators
   sourceNamespace: openshift-marketplace
+  startingCSV: ${TEKTON_OPERATOR_STARTINGCSV}
 EOF
 
     # Tekton: TektonPipeline Custom Resource
@@ -394,38 +402,6 @@ spec:
 EOF
 
     log_info "YAML files created."
-}
-
-# ========== CREATE TEKTON OPERATOR OLM MANIFESTS ==========
-create_tekton_operator_manifests() {
-    log_info "Creating Tekton Operator OLM manifests..."
-    # Create the OperatorGroup manifest in the openshift-operators namespace.
-    cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: pipelines-operator-group
-  namespace: $TEKTON_OPERATOR_NAMESPACE
-spec:
-  targetNamespaces:
-    - $TEKTON_NAMESPACE
-EOF
-
-    # Create the Subscription manifest in the openshift-operators namespace.
-    cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
-apiVersion: operators.coreos.com/v1alpha1
-kind: Subscription
-metadata:
-  name: ${TEKTON_OPERATOR_PACKAGE}
-  namespace: $TEKTON_OPERATOR_NAMESPACE
-spec:
-  channel: $TEKTON_OPERATOR_CHANNEL
-  installPlanApproval: Automatic
-  name: ${TEKTON_OPERATOR_PACKAGE}
-  source: redhat-operators
-  sourceNamespace: openshift-marketplace
-EOF
-    log_info "Tekton Operator OLM manifests created."
 }
 
 # ========== SETUP RBAC ROLEBINDING ==========
