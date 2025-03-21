@@ -5,7 +5,8 @@ metadata:
   namespace: awx
 spec:
   service_type: ClusterIP
-  ingress_type: none
-  hostname: awx.example.com
+  ingress_type: route                     # ← changed from "none"
+  hostname: awx.apps-crc.testing          # ← match your actual route domain
   image: quay.io/ansible/awx:24.0.0
+  image_version: 24.0.0                   # ← add this line
   image_pull_policy: IfNotPresent
