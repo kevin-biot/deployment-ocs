@@ -6,9 +6,12 @@ set -euo pipefail
 GIT_REPO="https://github.com/kevin-biot/deployment-ocs.git"
 GIT_BRANCH="main"
 ARGO_NAMESPACE="openshift-gitops"
-TEKTON_OPERATOR_NAMESPACE="openshift-operators"  # Operator install namespace
-TEKTON_NAMESPACE="openshift-pipelines"          # Pipeline runtime namespace
+
+# Namespaces for operator installation and runtime
+TEKTON_OPERATOR_NAMESPACE="openshift-operators"  # Where OLM installs the operator
+TEKTON_NAMESPACE="openshift-pipelines"          # Where pipelines run
 ANSIBLE_NAMESPACE="awx"
+
 LOCAL_GIT_DIR=~/deployment-ocs
 LOG_DIR="$LOCAL_GIT_DIR/logs"
 DEPLOY_LOG="$LOG_DIR/deployment.log"
@@ -16,10 +19,21 @@ DEPLOY_LOG="$LOG_DIR/deployment.log"
 GIT_USERNAME="${GIT_USERNAME:-kevin-biot}"
 GIT_TOKEN="${GIT_TOKEN:-}"
 
+# New variables per Red Hat documentation:
+TEKTON_OPERATOR_PACKAGE="openshift-pipelines-operator-rh"
+TEKTON_OPERATOR_CHANNEL="latest"   # Change to a specific channel (e.g., "pipelines-1.8") if needed
+
 # ========== UTILITIES ==========
-log_info() { echo -e "\e[32m[INFO] $1\e[0m" | tee -a "$DEPLOY_LOG"; }
-log_error() { echo -e "\e[31m[ERROR] $1\e[0m" | tee -a "$DEPLOY_LOG"; }
-error_exit() { log_error "$1"; exit 1; }
+log_info() {
+    echo -e "\e[32m[INFO] $1\e[0m" | tee -a "$DEPLOY_LOG"
+}
+log_error() {
+    echo -e "\e[31m[ERROR] $1\e[0m" | tee -a "$DEPLOY_LOG"
+}
+error_exit() {
+    log_error "$1"
+    exit 1
+}
 
 # ========== CHECK DEPENDENCIES ==========
 check_dependencies() {
