@@ -1198,3 +1198,20 @@
 \e[32m[INFO] Creating Tekton Operator OLM manifests...\e[0m
 \e[32m[INFO] Tekton Operator OLM manifests created.\e[0m
 \e[32m[INFO] Committing and pushing YAML files...\e[0m
+\e[32m[INFO] Changes pushed.\e[0m
+\e[32m[INFO] Namespace 'openshift-pipelines' exists.\e[0m
+\e[32m[INFO] Namespace 'awx' exists.\e[0m
+\e[32m[INFO] Namespace 'awx-operator' not found; creating it...\e[0m
+\e[32m[INFO] Namespace 'openshift-operators' exists.\e[0m
+\e[32m[INFO] Namespace 'openshift-operators' exists.\e[0m
+\e[32m[INFO] Setting up RBAC for ArgoCD service account...\e[0m
+\e[32m[INFO] RBAC RoleBindings and ClusterRole configured.\e[0m
+\e[32m[INFO] Verifying clean slate...\e[0m
+\e[32m[INFO] Checking pods in namespace: openshift-marketplace\e[0m
+\e[32m[INFO] Checking dependencies...\e[0m
+\e[32m[INFO] Dependencies verified.\e[0m
+\e[32m[INFO] Deleting existing ArgoCD applications to prevent sync interference...\e[0m
+\e[32m[INFO] Verifying that ArgoCD apps are fully deleted...\e[0m
+\e[31m[ERROR] ArgoCD app awx-app still exists; retrying deletion...\e[0m
+\e[32m[INFO] ArgoCD applications removed successfully.\e[0m
+\e[32m[INFO] Cleaning Git repository state...\e[0m

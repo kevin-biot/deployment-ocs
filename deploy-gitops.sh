@@ -21,7 +21,7 @@ GIT_TOKEN="${GIT_TOKEN:-}"
 
 # New variables per Red Hat documentation:
 TEKTON_OPERATOR_PACKAGE="openshift-pipelines-operator-rh"
-TEKTON_OPERATOR_CHANNEL="latest"   # Change to a specific channel (e.g., "pipelines-1.8") if needed
+TEKTON_OPERATOR_CHANNEL="pipelines-1.18"
 
 # ========== UTILITIES ==========
 log_info() {
