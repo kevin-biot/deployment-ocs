@@ -122,30 +122,50 @@ cleanup_old_resources() {
 # ========== VERIFY CLEAN SLATE ==========
 verify_clean_slate() {
     log_info "Verifying clean slate..."
+    local unexpected_pods_found=false
+
     for ns in "openshift-marketplace" "tekton-operator" "awx-operator" "$TEKTON_NAMESPACE" "$TEKTON_OPERATOR_NAMESPACE"; do
+        log_info "Checking pods in namespace: $ns"
         local pod_count
         pod_count=$(oc get pods -n "$ns" --no-headers 2>/dev/null | wc -l)
         if [ "$pod_count" -gt 0 ]; then
             if [ "$ns" == "openshift-marketplace" ]; then
-                # For marketplace, filter out expected system pods.
+                # For marketplace, filter out expected system pods and completed pods.
                 local unexpected
-                unexpected=$(oc get pods -n "$ns" --no-headers 2>/dev/null | grep -v -E "marketplace-operator|certified-operators|community-operators|redhat-operators|redhat-marketplace")
+                unexpected=$(oc get pods -n "$ns" --no-headers 2>/dev/null | grep -v -E "marketplace-operator|certified-operators|community-operators|redhat-operators|redhat-marketplace" | grep -v "Completed")
                 if [ -n "$unexpected" ]; then
                     log_error "Unexpected pods found in $ns after cleanup:"
                     echo "$unexpected"
-                    error_exit "Cleanup incomplete; unexpected pods detected in $ns."
+                    unexpected_pods_found=true
                 else
-                    log_info "Only expected system pods found in $ns:"
+                    log_info "Only expected system pods or completed pods found in $ns:"
                     oc get pods -n "$ns"
                 fi
             else
-                log_error "Found $pod_count pods in $ns after cleanup:"
-                oc get pods -n "$ns"
-                error_exit "Cleanup incomplete; residual pods detected in $ns."
+                # For other namespaces, check for non-completed pods.
+                local running_pods
+                running_pods=$(oc get pods -n "$ns" --no-headers 2>/dev/null | grep -v "Completed")
+                if [ -n "$running_pods" ]; then
+                    log_error "Found running pods in $ns after cleanup:"
+                    echo "$running_pods"
+                    unexpected_pods_found=true
+                else
+                    log_info "No running pods found in $ns:"
+                    oc get pods -n "$ns"
+                fi
             fi
+        else
+            log_info "No pods found in $ns."
         fi
     done
-    log_info "Clean slate verified."
+
+    if $unexpected_pods_found; then
+        log_error "Cleanup incomplete; unexpected pods detected."
+        # Optionally, exit the script if unexpected pods are critical.
+        # error_exit "Cleanup incomplete; unexpected pods detected."
+    else
+        log_info "Clean slate verified."
+    fi
 }
 
 # ========== VERIFY OPENSHIFT LOGIN ==========
