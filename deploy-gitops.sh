@@ -6,16 +6,9 @@ set -euo pipefail
 GIT_REPO="https://github.com/kevin-biot/deployment-ocs.git"
 GIT_BRANCH="main"
 ARGO_NAMESPACE="openshift-gitops"
-
-# For operator installation via OLM:
-TEKTON_OPERATOR_NAMESPACE="openshift-operators"  # Where the operator is installed by OLM
-TEKTON_NAMESPACE="openshift-pipelines"          # Where pipelines will run
+TEKTON_OPERATOR_NAMESPACE="openshift-operators"  # Operator install namespace
+TEKTON_NAMESPACE="openshift-pipelines"          # Pipeline runtime namespace
 ANSIBLE_NAMESPACE="awx"
-
-# New variables for operator package and channel from Red Hat docs:
-TEKTON_OPERATOR_PACKAGE="openshift-pipelines-operator-rh"
-TEKTON_OPERATOR_CHANNEL="latest"   # Set to "latest" (or "pipelines-1.8", etc.) as desired
-
 LOCAL_GIT_DIR=~/deployment-ocs
 LOG_DIR="$LOCAL_GIT_DIR/logs"
 DEPLOY_LOG="$LOG_DIR/deployment.log"
@@ -366,6 +359,38 @@ spec:
 EOF
 
     log_info "YAML files created."
+}
+
+# ========== CREATE TEKTON OPERATOR OLM MANIFESTS ==========
+create_tekton_operator_manifests() {
+    log_info "Creating Tekton Operator OLM manifests..."
+    # Create the OperatorGroup manifest in the openshift-operators namespace.
+    cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/operatorgroup.yaml"
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: pipelines-operator-group
+  namespace: $TEKTON_OPERATOR_NAMESPACE
+spec:
+  targetNamespaces:
+    - $TEKTON_NAMESPACE
+EOF
+
+    # Create the Subscription manifest in the openshift-operators namespace.
+    cat <<EOF > "$LOCAL_GIT_DIR/tekton-olm/subscription.yaml"
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: ${TEKTON_OPERATOR_PACKAGE}
+  namespace: $TEKTON_OPERATOR_NAMESPACE
+spec:
+  channel: $TEKTON_OPERATOR_CHANNEL
+  installPlanApproval: Automatic
+  name: ${TEKTON_OPERATOR_PACKAGE}
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+EOF
+    log_info "Tekton Operator OLM manifests created."
 }
 
 # ========== SETUP RBAC ROLEBINDING ==========
