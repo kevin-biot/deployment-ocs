@@ -19,7 +19,7 @@ DEPLOY_LOG="$LOG_DIR/deployment.log"
 GIT_USERNAME="${GIT_USERNAME:-kevin-biot}"
 GIT_TOKEN="${GIT_TOKEN:-}"
 
-# New variables per Red Hat documentation:
+# Variables per Red Hat documentation:
 TEKTON_OPERATOR_PACKAGE="openshift-pipelines-operator-rh"
 TEKTON_OPERATOR_CHANNEL="pipelines-1.18"
 
