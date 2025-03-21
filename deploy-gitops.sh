@@ -127,11 +127,12 @@ verify_clean_slate() {
         pod_count=$(oc get pods -n "$ns" --no-headers 2>/dev/null | wc -l)
         if [ "$pod_count" -gt 0 ]; then
             if [ "$ns" == "openshift-marketplace" ]; then
-                local unexpected_pods
-                unexpected_pods=$(oc get pods -n "$ns" --no-headers 2>/dev/null | grep -v -E "marketplace-operator|certified-operators|community-operators|redhat-operators|redhat-marketplace" | wc -l)
-                if [ "$unexpected_pods" -gt 0 ]; then
-                    log_error "Found $unexpected_pods unexpected pods in $ns after cleanup:"
-                    oc get pods -n "$ns" | grep -v -E "marketplace-operator|certified-operators|community-operators|redhat-operators|redhat-marketplace"
+                # For marketplace, filter out expected system pods.
+                local unexpected
+                unexpected=$(oc get pods -n "$ns" --no-headers 2>/dev/null | grep -v -E "marketplace-operator|certified-operators|community-operators|redhat-operators|redhat-marketplace")
+                if [ -n "$unexpected" ]; then
+                    log_error "Unexpected pods found in $ns after cleanup:"
+                    echo "$unexpected"
                     error_exit "Cleanup incomplete; unexpected pods detected in $ns."
                 else
                     log_info "Only expected system pods found in $ns:"
