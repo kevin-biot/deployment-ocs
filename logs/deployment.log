@@ -1350,3 +1350,8 @@
 \e[31m[ERROR] ArgoCD app awx-app still exists; retrying deletion...\e[0m
 \e[32m[INFO] ArgoCD applications removed successfully.\e[0m
 \e[32m[INFO] Cleaning Git repository state...\e[0m
+\e[32m[INFO] Cleaning up old resources...\e[0m
+\e[32m[INFO] Deleting custom CatalogSources in openshift-marketplace...\e[0m
+\e[32m[INFO] Cleaning up subscriptions, operatorgroups, and custom resources...\e[0m
+\e[32m[INFO] Deleting operator and app pods...\e[0m
+\e[32m[INFO] Resource cleanup complete.\e[0m
