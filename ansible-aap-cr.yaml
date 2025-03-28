@@ -1,0 +1,36 @@
+apiVersion: aap.ansible.com/v1alpha1
+kind: AnsibleAutomationPlatform
+metadata:
+  name: myaap
+  namespace: aap
+spec:
+  # Platform-wide configuration
+  image_pull_policy: IfNotPresent
+
+  # Define the controller component. If you have an existing controller in the namespace,
+  # provide its name. Otherwise, the operator will create one.
+  controller:
+    disabled: false
+    name: existing-controller-name
+
+  # Define the hub component. You can specify storage options for the Content pod.
+  hub:
+    disabled: false
+    name: existing-hub-name
+    # Uncomment the following if using file storage (ensure you have a RWX storage class)
+    storage_type: file
+    file_storage_storage_class: your-rwx-storage-class
+    file_storage_size: 10Gi
+    # If you prefer S3 or Azure object storage, use the following options instead:
+    # storage_type: S3
+    # object_storage_s3_secret: your-s3-secret-name
+    # storage_type: azure
+    # object_storage_azure_secret: your-azure-secret-name
+
+  # Define the EDA component (enable if needed)
+  eda:
+    disabled: false
+
+  # Disable lightspeed if you don't want it deployed
+  lightspeed:
+    disabled: true
