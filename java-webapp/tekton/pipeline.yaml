@@ -1,0 +1,54 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: java-webapp-pipeline
+  namespace: java-pipeline
+spec:
+  params:
+    - name: git-url
+    - name: git-revision
+    - name: build-name
+    - name: namespace
+  workspaces:
+    - name: shared-workspace
+  tasks:
+    - name: clone
+      taskRef:
+        name: git-clone
+      params:
+        - name: url
+          value: $(params.git-url)
+        - name: revision
+          value: $(params.git-revision)
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: maven-build
+      taskRef:
+        name: maven-build
+      runAfter:
+        - clone
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: war-sanity-check
+      taskRef:
+        name: war-sanity-check
+      runAfter:
+        - maven-build
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: build
+      taskRef:
+        name: shipwright-trigger
+      runAfter:
+        - war-sanity-check
+      params:
+        - name: BUILD_NAME
+          value: $(params.build-name)
+        - name: NAMESPACE
+          value: $(params.namespace)

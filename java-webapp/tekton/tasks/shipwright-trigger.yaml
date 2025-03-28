@@ -1,0 +1,25 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: shipwright-trigger
+  namespace: java-pipeline
+spec:
+  params:
+    - name: BUILD_NAME
+    - name: NAMESPACE
+  steps:
+    - name: trigger
+      image: bitnami/kubectl:latest
+      script: |
+        #!/bin/sh
+        echo "Triggering Shipwright build $(params.BUILD_NAME) in namespace $(params.NAMESPACE)"
+        cat <<EOF | kubectl create -f -
+        apiVersion: shipwright.io/v1alpha1
+        kind: BuildRun
+        metadata:
+          generateName: $(params.BUILD_NAME)-
+          namespace: $(params.NAMESPACE)
+        spec:
+          buildRef:
+            name: $(params.BUILD_NAME)
+        EOF

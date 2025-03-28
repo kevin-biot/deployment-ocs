@@ -1,0 +1,18 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: java-webapp-pipeline-run-v2
+  namespace: java-pipeline
+spec:
+  pipelineRef:
+    name: java-webapp-pipeline
+  params:
+    - name: git-url
+      value: https://github.com/kevin-biot/java-webapp.git
+    - name: git-revision
+      value: main
+    - name: image-url
+      value: image-registry.openshift-image-registry.svc:5000/java-pipeline/java-webapp:latest
+  workspaces:
+    - name: shared-workspace
+      emptyDir: {}

@@ -1,0 +1,9 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: deploy
+spec:
+  steps:
+    - name: deploy
+      image: registry.access.redhat.com/ubi8/ubi
+      script: echo "Pretend we're deploying here..."

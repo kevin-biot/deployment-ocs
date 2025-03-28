@@ -1,0 +1,20 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: java-webapp-pipeline-run
+  namespace: java-pipeline
+spec:
+  pipelineRef:
+    name: java-webapp-pipeline
+  params:
+    - name: git-url
+      value: https://github.com/kevin-biot/java-webapp.git
+    - name: git-revision
+      value: main
+    - name: build-name
+      value: java-webapp-build
+    - name: namespace
+      value: java-pipeline
+  workspaces:
+    - name: shared-workspace
+      emptyDir: {}

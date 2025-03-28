@@ -1,0 +1,8 @@
+apiVersion: shipwright.io/v1alpha1
+kind: BuildRun
+metadata:
+  name: java-webapp-buildrun
+  namespace: java-pipeline
+spec:
+  buildRef:
+    name: java-webapp-build

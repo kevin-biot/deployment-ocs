@@ -1,0 +1,16 @@
+apiVersion: shipwright.io/v1alpha1
+kind: Build
+metadata:
+  name: java-webapp-build
+  namespace: java-pipeline
+spec:
+  source:
+    url: https://github.com/kevin-biot/java-webapp.git
+    contextDir: .
+  strategy:
+    name: buildah
+    kind: BuildStrategy
+  output:
+    image: image-registry.openshift-image-registry.svc:5000/java-pipeline/java-webapp:latest
+    credentials:
+      name: push-secret

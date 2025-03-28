@@ -1,0 +1,24 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: war-sanity-check
+  namespace: java-pipeline
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: check-war
+      image: registry.access.redhat.com/ubi8/ubi
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/sh
+        echo "🕵️ Checking for WAR file in target/..."
+        if [ ! -f target/java-webapp.war ]; then
+          echo "❌ WAR file not found in target/ directory!"
+          exit 1
+        fi
+
+        echo "📦 Inspecting WAR file:"
+        file target/java-webapp.war
+
+        echo "✅ WAR file exists and passed basic inspection."

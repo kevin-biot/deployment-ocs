@@ -1,0 +1,20 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: maven-build
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: debug
+      image: maven:3.9.0-eclipse-temurin-17
+      workingDir: /workspace/source
+      script: |
+        echo "📂 Listing contents of /workspace/source"
+        ls -l /workspace/source
+
+    - name: build
+      image: maven:3.9.0-eclipse-temurin-17
+      workingDir: /workspace/source
+      script: |
+        mvn clean package

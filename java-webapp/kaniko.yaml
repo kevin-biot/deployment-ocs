@@ -1,0 +1,32 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: kaniko
+  labels:
+    app.kubernetes.io/version: "0.6"
+spec:
+  params:
+    - name: IMAGE
+      description: Reference of the image to build.
+      type: string
+    - name: DOCKERFILE
+      description: Path to the Dockerfile
+      default: ./Dockerfile
+    - name: CONTEXT
+      description: The build context used by Kaniko.
+      default: .
+  workspaces:
+    - name: source
+      description: Workspace with Dockerfile + context
+  steps:
+    - name: build-and-push
+      image: gcr.io/kaniko-project/executor:latest
+      args:
+        - "--dockerfile=$(params.DOCKERFILE)"
+        - "--context=$(workspaces.source.path)/$(params.CONTEXT)"
+        - "--destination=$(params.IMAGE)"
+        - "--insecure"
+        - "--insecure-pull"
+        - "--skip-tls-verify"
+      securityContext:
+        runAsUser: 0
