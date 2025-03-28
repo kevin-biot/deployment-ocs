@@ -8,13 +8,13 @@ spec:
   steps:
     - name: debug
       image: maven:3.9.0-eclipse-temurin-17
-      workingDir: /workspace/source
+      workingDir: /workspace/source/java-webapp
       script: |
         echo "📂 Listing contents of /workspace/source"
         ls -l /workspace/source
 
     - name: build
       image: maven:3.9.0-eclipse-temurin-17
-      workingDir: /workspace/source
+      workingDir: /workspace/source/java-webapp
       script: |
         mvn clean package

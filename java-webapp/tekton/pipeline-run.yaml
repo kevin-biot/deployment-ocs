@@ -8,7 +8,7 @@ spec:
     name: java-webapp-pipeline
   params:
     - name: git-url
-      value: https://github.com/kevin-biot/java-webapp.git
+      value: https://github.com/kevin-biot/deployment-ocs.git  # ✅ Correct repo
     - name: git-revision
       value: main
     - name: build-name
