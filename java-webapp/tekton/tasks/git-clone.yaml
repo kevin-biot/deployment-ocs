@@ -3,29 +3,29 @@ kind: Task
 metadata:
   name: git-clone
 spec:
-  workspaces:
-    - name: source
   params:
     - name: url
       type: string
     - name: revision
       type: string
-      default: "main"
-    - name: deleteExisting
-      type: string
-      default: "false"
     - name: subdirectory
       type: string
-      default: "deployment-ocs"
+      default: ""
+    - name: deleteExisting
+      type: string
+      default: "true"
+  workspaces:
+    - name: source
   steps:
     - name: clone
       image: alpine/git
+      workingDir: $(workspaces.source.path)
       script: |
-        set -e
-        echo "🧹 Deleting existing contents in $(workspaces.source.path) if deleteExisting=true"
+        #!/bin/sh
         if [ "$(params.deleteExisting)" = "true" ]; then
+          echo "🧹 Deleting existing contents in $(workspaces.source.path)"
           rm -rf $(workspaces.source.path)/*
         fi
 
         echo "🔁 Cloning repo $(params.url) on branch $(params.revision)"
-        git clone -b $(params.revision) $(params.url) $(workspaces.source.path)/$(params.subdirectory)
+        git clone --branch $(params.revision) $(params.url) $(params.subdirectory)
