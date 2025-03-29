@@ -12,8 +12,17 @@ spec:
       script: |
         echo "📂 Listing contents of /workspace/source"
         ls -l /workspace/source
+
         echo "📂 Listing contents of /workspace/source/java-webapp"
         ls -l /workspace/source/java-webapp
+
+        echo "📄 Checking for pom.xml"
+        if [ -f /workspace/source/java-webapp/pom.xml ]; then
+          echo "✅ pom.xml found"
+        else
+          echo "❌ pom.xml NOT FOUND"
+        fi
+
         echo "🔍 Recursively listing everything inside /workspace/source"
         find /workspace/source
 
