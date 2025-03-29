@@ -28,7 +28,7 @@ spec:
 
     - name: build
       image: maven:3.9.0-eclipse-temurin-17
-      workingDir: /workspace/source/java-webapp
+      workingDir: /workspace/source/deployment-ocs/java-webapp
       script: |
         echo "🚀 Running Maven build"
         mvn clean package
