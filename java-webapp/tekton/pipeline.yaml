@@ -27,7 +27,6 @@ spec:
       workspaces:
         - name: source
           workspace: shared-workspace
-
     - name: maven-build
       taskRef:
         name: maven-build
@@ -36,7 +35,6 @@ spec:
       workspaces:
         - name: source
           workspace: shared-workspace
-
     - name: war-sanity-check
       taskRef:
         name: war-sanity-check
@@ -45,7 +43,6 @@ spec:
       workspaces:
         - name: source
           workspace: shared-workspace
-
     - name: trigger-build
       taskRef:
         name: shipwright-trigger
@@ -56,7 +53,6 @@ spec:
           value: $(params.build-name)
         - name: NAMESPACE
           value: $(params.namespace)
-
     - name: deploy
       taskRef:
         name: deploy
@@ -64,4 +60,4 @@ spec:
         - trigger-build
       workspaces:
         - name: source
-          workspace: shared-workspaceapiVersion: tekton.dev/v1
+          workspace: shared-workspace
