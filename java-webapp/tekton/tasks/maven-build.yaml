@@ -6,6 +6,12 @@ spec:
   workspaces:
     - name: source
   steps:
+    - name: pre-debug
+      image: alpine
+      script: |
+        #!/bin/sh
+        echo "📂 Full listing of /workspace/source"
+        ls -lR /workspace/source
     - name: debug
       image: maven:3.9.0-eclipse-temurin-17
       workingDir: /workspace/source
