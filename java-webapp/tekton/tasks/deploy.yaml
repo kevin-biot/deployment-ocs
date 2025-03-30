@@ -3,7 +3,14 @@ kind: Task
 metadata:
   name: deploy
 spec:
+  workspaces:
+    - name: source   # ✅ This is what the pipeline binds
   steps:
     - name: deploy
       image: registry.access.redhat.com/ubi8/ubi
-      script: echo "Pretend we're deploying here..."
+      workingDir: $(workspaces.source.path)/deployment-ocs/java-webapp
+      script: |
+        #!/bin/sh
+        echo "🚀 Pretending to deploy..."
+        echo "Contents of working dir:"
+        ls -l
