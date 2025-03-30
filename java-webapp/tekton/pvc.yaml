@@ -9,5 +9,4 @@ spec:
   resources:
     requests:
       storage: 1Gi
-  storageClassName: ""  # Match manual PV
-  volumeName: java-pipeline-pv  # Bind to our PV
+  storageClassName: crc-csi-hostpath-provisioner
