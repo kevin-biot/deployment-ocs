@@ -17,4 +17,5 @@ spec:
       value: java-pipeline
   workspaces:
     - name: shared-workspace
-      emptyDir: {}
+      persistentVolumeClaim:
+        claimName: java-pipeline-pvc
