@@ -17,13 +17,15 @@ spec:
       image: alpine/git
       script: |
         #!/bin/sh
+        set -e  # Exit on any error
         if [ "$(params.deleteExisting)" = "true" ]; then
           echo "🧹 Deleting existing contents in $(workspaces.source.path)"
           rm -rf $(workspaces.source.path)/*
         fi
-
         TARGET_DIR=$(workspaces.source.path)/$(params.subdirectory)
         mkdir -p "$TARGET_DIR"
         cd "$TARGET_DIR"
         echo "🔁 Cloning repo $(params.url) on branch $(params.revision) into $TARGET_DIR/"
-        git clone --branch $(params.revision) --single-branch $(params.url) .
+        git clone --branch $(params.revision) --single-branch $(params.url) . || { echo "❌ Git clone failed"; exit 1; }
+        echo "📂 Contents of $TARGET_DIR after clone:"
+        ls -la "$TARGET_DIR"

@@ -14,15 +14,17 @@ spec:
         ls -l /workspace/source
         echo "📂 Listing contents of /workspace/source/deployment-ocs"
         ls -l /workspace/source/deployment-ocs
+        echo "📂 Listing contents of /workspace/source/deployment-ocs/java-webapp"
+        ls -l /workspace/source/deployment-ocs/java-webapp
         echo "📄 Checking for pom.xml"
-        if [ ! -f /workspace/source/deployment-ocs/pom.xml ]; then
+        if [ ! -f /workspace/source/deployment-ocs/java-webapp/pom.xml ]; then
           echo "❌ pom.xml NOT FOUND"
           exit 1
         fi
         echo "✅ pom.xml found"
     - name: build
       image: maven:3.9.0-eclipse-temurin-17
-      workingDir: /workspace/source/deployment-ocs
+      workingDir: /workspace/source/deployment-ocs/java-webapp
       script: |
         echo "🚀 Running Maven build"
         mvn clean package
