@@ -9,10 +9,10 @@ spec:
   steps:
     - name: check-war
       image: registry.access.redhat.com/ubi8/ubi
-      workingDir: $(workspaces.source.path)
+      workingDir: /workspace/source/deployment-ocs/java-webapp
       script: |
         #!/bin/sh
-        echo "🕵️ Checking for WAR file in target/..."
+        echo "🕵️  Checking for WAR file in target/..."
         if [ ! -f target/java-webapp.war ]; then
           echo "❌ WAR file not found in target/ directory!"
           exit 1
