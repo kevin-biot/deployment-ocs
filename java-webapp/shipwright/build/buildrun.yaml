@@ -1,4 +1,4 @@
-apiVersion: shipwright.io/v1alpha1
+apiVersion: shipwright.io/v1beta1
 kind: BuildRun
 metadata:
   name: java-webapp-buildrun
