@@ -4,5 +4,5 @@ metadata:
   name: java-webapp-buildrun
   namespace: java-pipeline
 spec:
-  buildRef:
+  build:
     name: java-webapp-build
