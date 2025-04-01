@@ -9,6 +9,6 @@ spec:
     contextDir: java-webapp
   strategy:
     name: buildah
-    kind: BuildStrategy
+    kind: ClusterBuildStrategy
   output:
     image: image-registry.openshift-image-registry.svc:5000/java-pipeline/java-webapp-build:latest
