@@ -11,4 +11,4 @@ spec:
     name: buildah
     kind: BuildStrategy
   output:
-    image: image-registry.openshift-image-registry.svc:5000/java-pipeline/java-webapp:latest
+    image: image-registry.openshift-image-registry.svc:5000/java-pipeline/java-webapp-build:latest
