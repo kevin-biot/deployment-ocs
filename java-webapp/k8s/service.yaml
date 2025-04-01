@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: java-webapp
+  namespace: java-pipeline
+spec:
+  selector:
+    app: java-webapp
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
