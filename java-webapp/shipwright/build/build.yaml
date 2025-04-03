@@ -5,8 +5,10 @@ metadata:
   namespace: java-pipeline
 spec:
   source:
-    url: https://github.com/kevin-biot/deployment-ocs.git
+    type: Git
     contextDir: java-webapp
+    git:
+      url: https://github.com/kevin-biot/deployment-ocs.git
   strategy:
     name: buildah-shipwright-managed-push
     kind: ClusterBuildStrategy
