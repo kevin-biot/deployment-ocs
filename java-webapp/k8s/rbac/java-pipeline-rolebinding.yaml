@@ -1,0 +1,14 @@
+# java-pipeline-rolebinding.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argocd-app-controller-binding
+  namespace: java-pipeline
+subjects:
+  - kind: ServiceAccount
+    name: openshift-gitops-argocd-application-controller
+    namespace: openshift-gitops
+roleRef:
+  kind: Role
+  name: argocd-tekton-shipwright-role
+  apiGroup: rbac.authorization.k8s.io

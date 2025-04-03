@@ -1,0 +1,16 @@
+# java-pipeline-role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argocd-tekton-shipwright-role
+  namespace: java-pipeline
+rules:
+  - apiGroups: ["", "apps", "route.openshift.io"]
+    resources: ["services", "deployments", "routes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["tekton.dev"]
+    resources: ["tasks", "pipelines", "pipelineruns"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["shipwright.io"]
+    resources: ["builds", "buildruns", "buildstrategies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
